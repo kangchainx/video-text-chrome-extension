@@ -1,0 +1,5 @@
+fastapi
+uvicorn
+yt-dlp
+faster-whisper
+python-multipart
