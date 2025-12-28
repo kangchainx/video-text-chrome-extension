@@ -1,0 +1,9 @@
+{
+  "name": "com.video_text.transcriber",
+  "description": "Video Text Assistant Native Host",
+  "path": "/ABSOLUTE/PATH/TO/native-host/host-macos.sh",
+  "type": "stdio",
+  "allowed_origins": [
+    "chrome-extension://__EXTENSION_ID__/"
+  ]
+}
