@@ -7,12 +7,14 @@
     "sidePanel",
     "activeTab",
     "storage",
-    "scripting",
-    "tabCapture"
+    "downloads",
+    "cookies",
+    "nativeMessaging"
   ],
   "host_permissions": [
     "https://www.youtube.com/*",
-    "https://www.bilibili.com/*"
+    "https://www.bilibili.com/*",
+    "http://127.0.0.1/*"
   ],
   "background": {
     "service_worker": "src/background/index.ts",
@@ -24,15 +26,6 @@
   "action": {
     "default_title": "点击打开视频转文字助手"
   },
-  "content_scripts": [
-    {
-      "matches": [
-        "https://www.youtube.com/*",
-        "https://www.bilibili.com/*"
-      ],
-      "js": ["src/content/index.ts"]
-    }
-  ],
   "content_security_policy": {
     "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'; worker-src 'self';"
   }

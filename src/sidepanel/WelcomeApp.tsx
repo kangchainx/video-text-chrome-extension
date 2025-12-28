@@ -28,8 +28,8 @@ const WelcomeApp: React.FC = () => {
              <div className="w-12 h-12 bg-white rounded-2xl shadow-sm flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
                 <DownloadSimple size={28} className="text-violet-600" />
              </div>
-             <h3 className="text-lg font-bold mb-2">首次加载说明</h3>
-             <p className="text-slate-500 text-sm leading-relaxed">首次使用需下载约 100MB 的模型权重，请确保网络环境畅通。</p>
+             <h3 className="text-lg font-bold mb-2">本地服务说明</h3>
+             <p className="text-slate-500 text-sm leading-relaxed">首次使用需安装本地服务并下载模型权重，以便离线转写视频音频。</p>
           </div>
         </div>
 
