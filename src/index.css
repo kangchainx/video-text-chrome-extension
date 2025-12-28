@@ -12,12 +12,12 @@ body {
 
 /* 滚动条美化 */
 ::-webkit-scrollbar {
-  width: 6px;
+  width: 0;
+  height: 0;
 }
 ::-webkit-scrollbar-thumb {
-  background: #e2e8f0;
-  border-radius: 10px;
+  background: transparent;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #cbd5e1;
+  background: transparent;
 }
