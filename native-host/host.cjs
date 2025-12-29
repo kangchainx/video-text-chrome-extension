@@ -7,11 +7,14 @@ const { spawn } = require('child_process');
 
 const SERVICE_PORT = parseInt(process.env.TRANSCRIBER_PORT || '8001', 10);
 const PYTHON_BIN = process.env.PYTHON_BIN || 'python3';
+const TRANSCRIBER_BIN = process.env.TRANSCRIBER_BIN || '';
 const DEFAULT_SCRIPT_PATH = path.resolve(__dirname, 'mini_transcriber.py');
+const DEFAULT_BIN_PATH = path.resolve(__dirname, 'video-text-transcriber');
 const DEFAULT_TOKEN_PATH = path.resolve(__dirname, 'temp', 'service.token');
 const DEFAULT_LOG_PATH = path.resolve(__dirname, 'temp', 'native-host.log');
 const SCRIPT_PATH = process.env.TRANSCRIBER_SCRIPT || DEFAULT_SCRIPT_PATH;
-const TOKEN_PATH = process.env.TRANSCRIBER_TOKEN_PATH || DEFAULT_TOKEN_PATH;
+const BIN_PATH = TRANSCRIBER_BIN || DEFAULT_BIN_PATH;
+let currentTokenPath = process.env.TRANSCRIBER_TOKEN_PATH || DEFAULT_TOKEN_PATH;
 const LOG_PATH = process.env.NATIVE_HOST_LOG_PATH || DEFAULT_LOG_PATH;
 
 let childProcess = null;
@@ -28,7 +31,7 @@ function log(line) {
 
 function readToken() {
   try {
-    return fs.readFileSync(TOKEN_PATH, 'utf8').trim();
+    return fs.readFileSync(currentTokenPath, 'utf8').trim();
   } catch (err) {
     return '';
   }
@@ -60,16 +63,16 @@ function checkHealth() {
   });
 }
 
-async function waitForHealth(retries = 20) {
+async function waitForHealth(retries = 120, delayMs = 500) {
   for (let i = 0; i < retries; i += 1) {
     const ok = await checkHealth();
     if (ok) return true;
-    await wait(300);
+    await wait(delayMs);
   }
   return false;
 }
 
-async function waitForToken(retries = 10) {
+async function waitForToken(retries = 60) {
   for (let i = 0; i < retries; i += 1) {
     const token = readToken();
     if (token) return token;
@@ -78,14 +81,39 @@ async function waitForToken(retries = 10) {
   return '';
 }
 
+function resolveServiceCommand() {
+  if (BIN_PATH && fs.existsSync(BIN_PATH)) {
+    const stat = fs.statSync(BIN_PATH);
+    if (stat.isDirectory()) {
+      const nested = path.join(BIN_PATH, 'video-text-transcriber');
+      if (fs.existsSync(nested)) {
+        return { command: nested, args: [], mode: 'bin' };
+      }
+    }
+    return { command: BIN_PATH, args: [], mode: 'bin' };
+  }
+  return { command: PYTHON_BIN, args: [SCRIPT_PATH], mode: 'python' };
+}
+
 function startService(token) {
   const env = {
     ...process.env,
     TRANSCRIBER_PORT: String(SERVICE_PORT),
     TRANSCRIBER_TOKEN: token,
   };
-  log(`[host] startService python=${PYTHON_BIN} script=${SCRIPT_PATH} port=${SERVICE_PORT}`);
-  childProcess = spawn(PYTHON_BIN, [SCRIPT_PATH], {
+  const { command, args, mode } = resolveServiceCommand();
+  if (mode === 'bin') {
+    const binDir = path.dirname(command);
+    const tokenPath =
+      process.env.TRANSCRIBER_TOKEN_PATH || path.join(binDir, 'temp', 'service.token');
+    env.TRANSCRIBER_BASE_DIR = binDir;
+    env.TRANSCRIBER_TOKEN_PATH = tokenPath;
+    currentTokenPath = tokenPath;
+  }
+  log(
+    `[host] startService mode=${mode} command=${command} port=${SERVICE_PORT}`
+  );
+  childProcess = spawn(command, args, {
     env,
     detached: true,
     stdio: 'ignore',
@@ -207,4 +235,6 @@ process.on('unhandledRejection', (reason) => {
   process.exit(1);
 });
 
-log(`[host] loaded port=${SERVICE_PORT} python=${PYTHON_BIN} script=${SCRIPT_PATH}`);
+log(
+  `[host] loaded port=${SERVICE_PORT} python=${PYTHON_BIN} script=${SCRIPT_PATH} bin=${BIN_PATH}`
+);
