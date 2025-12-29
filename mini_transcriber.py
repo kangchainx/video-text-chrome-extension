@@ -2,6 +2,8 @@ import asyncio
 import json
 import os
 import sqlite3
+import sys
+import multiprocessing
 import threading
 import time
 import uuid
@@ -14,18 +16,41 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 import yt_dlp
+
+CPU_THREADS = int(os.getenv("TRANSCRIBER_CPU_THREADS", "2"))
+os.environ.setdefault("OMP_NUM_THREADS", str(CPU_THREADS))
+os.environ.setdefault("MKL_NUM_THREADS", str(CPU_THREADS))
+os.environ.setdefault("OPENBLAS_NUM_THREADS", str(CPU_THREADS))
+os.environ.setdefault("NUMEXPR_NUM_THREADS", str(CPU_THREADS))
+
 from faster_whisper import WhisperModel
+
+try:
+    from opencc import OpenCC
+except ImportError:  # pragma: no cover
+    OpenCC = None
 
 app = FastAPI(title="Mini Video Transcriber")
 
-BASE_DIR = Path(__file__).parent
+def _resolve_base_dir() -> Path:
+    override = os.getenv("TRANSCRIBER_BASE_DIR")
+    if override:
+        return Path(override)
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent
+    return Path(__file__).resolve().parent
+
+
+BASE_DIR = _resolve_base_dir()
 TEMP_DIR = BASE_DIR / "temp"
 TEMP_DIR.mkdir(exist_ok=True)
 DB_PATH = Path(os.getenv("TRANSCRIBER_DB_PATH", str(TEMP_DIR / "tasks.db")))
+SERVICE_LOG_PATH = Path(os.getenv("TRANSCRIBER_SERVICE_LOG", str(TEMP_DIR / "service.log")))
 
-MODEL_SIZE = os.getenv("WHISPER_MODEL", "small")
+MODEL_SIZE = os.getenv("WHISPER_MODEL", "tiny")
 WHISPER_DEVICE = os.getenv("WHISPER_DEVICE", "cpu")
 WHISPER_COMPUTE = os.getenv("WHISPER_COMPUTE", "int8")
+IDLE_SECONDS = int(os.getenv("TRANSCRIBER_IDLE_SECONDS", "600"))
 
 SERVICE_PORT = int(os.getenv("TRANSCRIBER_PORT", "8001"))
 SERVICE_TOKEN = os.getenv("TRANSCRIBER_TOKEN")
@@ -39,7 +64,24 @@ if not SERVICE_TOKEN:
     except OSError:
         pass
 
-whisper_model = WhisperModel(MODEL_SIZE, device=WHISPER_DEVICE, compute_type=WHISPER_COMPUTE)
+whisper_model = WhisperModel(
+    MODEL_SIZE,
+    device=WHISPER_DEVICE,
+    compute_type=WHISPER_COMPUTE,
+    cpu_threads=CPU_THREADS,
+    num_workers=1,
+)
+OPENCC_T2S = OpenCC("t2s") if OpenCC else None
+
+
+def _log(message: str) -> None:
+    try:
+        SERVICE_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        timestamp = time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime())
+        with SERVICE_LOG_PATH.open("a", encoding="utf-8", errors="ignore") as handle:
+            handle.write(f"{timestamp} {message}\n")
+    except OSError:
+        pass
 
 app.add_middleware(
     CORSMiddleware,
@@ -91,6 +133,7 @@ lock = threading.Lock()
 condition = threading.Condition(lock)
 db_lock = threading.Lock()
 queue_sequence = int(time.time() * 1000)
+last_activity = time.time()
 
 
 @app.get("/health")
@@ -119,6 +162,15 @@ def _sanitize_filename(name: str) -> str:
             keep.append("_")
     cleaned = "".join(keep).strip(" ._-")
     return cleaned[:80] or "transcription"
+
+
+def _to_simplified(text: str) -> str:
+    if not text or not OPENCC_T2S:
+        return text
+    try:
+        return OPENCC_T2S.convert(text)
+    except Exception:
+        return text
 
 
 def _cookiefile_path(task_id: str) -> Path:
@@ -358,6 +410,11 @@ def _snapshot_tasks() -> Dict[str, Any]:
         }
 
 
+def _touch_activity() -> None:
+    global last_activity
+    last_activity = time.time()
+
+
 def _update_task(task_id: str, **updates: Any) -> None:
     with lock:
         task = tasks.get(task_id)
@@ -366,6 +423,7 @@ def _update_task(task_id: str, **updates: Any) -> None:
         task.update(updates)
         task["updatedAt"] = time.time()
         _db_upsert_task(task)
+        _touch_activity()
 
 
 def _mark_canceled(task_id: str) -> None:
@@ -393,6 +451,7 @@ def _clear_task_files(task: Dict[str, Any]) -> None:
 def _enqueue(task_id: str) -> None:
     with condition:
         queue.append(task_id)
+        _touch_activity()
         condition.notify()
 
 
@@ -471,7 +530,7 @@ def _download_audio(task_id: str, url: str, cookiefile: Optional[str]) -> Path:
 
 
 def _transcribe_audio(task_id: str, audio_path: Path) -> str:
-    segments, info = whisper_model.transcribe(str(audio_path))
+    segments, info = whisper_model.transcribe(str(audio_path), language="zh")
     total_duration = getattr(info, "duration", None) or 0
     parts = []
     for segment in segments:
@@ -482,7 +541,8 @@ def _transcribe_audio(task_id: str, audio_path: Path) -> str:
             progress = min(100, int(segment.end / total_duration * 100))
             _update_task(task_id, transcribeProgress=progress)
     _update_task(task_id, transcribeProgress=100)
-    return "".join(parts).strip()
+    text = "".join(parts).strip()
+    return _to_simplified(text)
 
 
 def _process_task(task_id: str) -> None:
@@ -552,6 +612,7 @@ def _worker_loop() -> None:
                 condition.wait()
             task_id = queue.popleft()
             active_task_id = task_id
+            _touch_activity()
         try:
             _process_task(task_id)
         finally:
@@ -559,10 +620,26 @@ def _worker_loop() -> None:
                 active_task_id = None
 
 
+def _idle_monitor_loop() -> None:
+    if IDLE_SECONDS <= 0:
+        return
+    while True:
+        time.sleep(5)
+        with lock:
+            has_active = bool(queue) or active_task_id is not None
+            idle_for = time.time() - last_activity
+        if has_active:
+            continue
+        if idle_for >= IDLE_SECONDS:
+            os._exit(0)
+
+
 _init_db()
 _load_tasks_from_db()
 worker = threading.Thread(target=_worker_loop, daemon=True)
 worker.start()
+idle_monitor = threading.Thread(target=_idle_monitor_loop, daemon=True)
+idle_monitor.start()
 
 
 @app.get("/api/tasks")
@@ -761,4 +838,13 @@ def download_result(request: Request, task_id: str, token: Optional[str] = Query
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="127.0.0.1", port=SERVICE_PORT)
+    multiprocessing.freeze_support()
+    _log(f"WEB_CONCURRENCY={os.environ.get('WEB_CONCURRENCY')}")
+    _log(
+        "MODEL_CONFIG="
+        f"{MODEL_SIZE} device={WHISPER_DEVICE} compute={WHISPER_COMPUTE} "
+        f"cpu_threads={CPU_THREADS} num_workers=1 idle_seconds={IDLE_SECONDS}"
+    )
+    os.environ.pop("WEB_CONCURRENCY", None)
+    os.environ.pop("UVICORN_WORKERS", None)
+    uvicorn.run(app, host="127.0.0.1", port=SERVICE_PORT, workers=1, reload=False)

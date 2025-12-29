@@ -3,3 +3,4 @@ uvicorn
 yt-dlp
 faster-whisper
 python-multipart
+opencc-python-reimplemented
