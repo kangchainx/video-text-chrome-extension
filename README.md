@@ -25,6 +25,9 @@ python mini_transcriber.py
 ```
 The service listens on `http://127.0.0.1:8001`. The token is written to `temp/service.token` (relative to the service script directory).
 
+### 2.1) Chinese output normalization
+Chinese transcripts are normalized to **Simplified Chinese** using OpenCC (`opencc-python-reimplemented`).
+
 ### 3) Extra dependency (YouTube n challenge)
 Install Node.js so yt-dlp can use the EJS runtime. Restart the service after installing Node.
 
@@ -43,6 +46,45 @@ Tasks are persisted to SQLite at `temp/tasks.db`. On service restart:
 - tasks that were in progress are marked as `error` with an "interrupted" message
 
 ## Native Host (macOS)
+
+### Option A: .pkg installer (recommended for distribution)
+
+This option bundles the Python service into a standalone executable (PyInstaller onedir), so **end users do not need Python installed**.
+
+Build the package (developer-only step, requires Python + PyInstaller):
+```bash
+python3 -m pip install -r requirements-mini.txt pyinstaller
+chmod +x native-host/build-macos-pkg.sh
+./native-host/build-macos-pkg.sh <EXTENSION_ID> 1.0.0
+```
+
+Install to the **current user** (no admin required):
+```bash
+installer -pkg native-host/VideoTextHost.pkg -target CurrentUserHomeDirectory
+```
+
+Test the bundled service binary (optional):
+```bash
+"$HOME/Library/Application Support/VideoTextHost/video-text-transcriber/video-text-transcriber"
+```
+
+Installed files:
+- Host directory: `~/Library/Application Support/VideoTextHost/`
+- Native Host manifest: `~/Library/Application Support/Google/Chrome/NativeMessagingHosts/com.video_text.transcriber.json`
+
+Bundled service binary:
+- `~/Library/Application Support/VideoTextHost/video-text-transcriber`
+
+> If you double-click the `.pkg`, macOS may install to the system root and require admin privileges.  
+> Use the command above to keep everything inside the user directory.
+
+Uninstall (macOS):
+```bash
+chmod +x native-host/uninstall-macos.sh
+./native-host/uninstall-macos.sh
+```
+
+### Option B: manual setup
 
 1) Install Node.js
 2) Keep these files in the **same folder** (recommended)
@@ -76,15 +118,26 @@ cp native-host/com.video_text.transcriber.json \
 ### Native Host environment variables
 - `PYTHON_BIN`: path to Python binary
 - `TRANSCRIBER_SCRIPT`: absolute path to `mini_transcriber.py` (only if not colocated)
+- `TRANSCRIBER_BIN`: path to bundled `video-text-transcriber` (preferred if present)
+- `TRANSCRIBER_BASE_DIR`: base directory for temp/db/token files (when using the binary)
 - `TRANSCRIBER_PORT`: service port
 - `TRANSCRIBER_TOKEN_PATH`: token file path
 - `NATIVE_HOST_LOG_PATH`: host log file path
+- `TRANSCRIBER_CPU_THREADS`: CPU thread cap for transcription (default: `2`)
+- `TRANSCRIBER_IDLE_SECONDS`: auto-exit when idle (default: `600`)
+- `TRANSCRIBER_SERVICE_LOG`: service log file path (default: `temp/service.log`)
+
+### Performance defaults
+- Default model size is `tiny` to keep CPU/memory usage low on typical laptops.
+- Transcription runs with a single worker and a low thread cap by default.
+- The service auto-exits after 10 minutes of idle time to avoid running in the background.
 
 ### Logs and token location (recommended layout)
 If you use `~/video-text-host/` as the host directory, logs and token are stored under:
 ```
 ~/video-text-host/temp/
   service.token
+  service.log
   native-host.log
   native-host-wrapper.log
   tasks.db

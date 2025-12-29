@@ -6,3 +6,5 @@ __pycache__
 downloads
 dist
 temp
+native-host/VideoTextHost.pkg
+native-host/macos-pkg/build
