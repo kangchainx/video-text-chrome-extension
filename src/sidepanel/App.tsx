@@ -5,6 +5,7 @@ import {
   Clock,
   DownloadSimple,
   Plus,
+  Power,
   Trash,
   WarningCircle,
   X,
@@ -35,6 +36,33 @@ interface TasksSnapshot {
   activeTaskId: string | null
 }
 
+type DiagnosticStage = 'idle' | 'running' | 'result'
+type DiagnosticStatus = 'pending' | 'running' | 'done' | 'fail'
+
+interface DiagnosticStep {
+  id: string
+  label: string
+  status: DiagnosticStatus
+}
+
+type ToastKind = 'info' | 'error' | 'success'
+
+interface ToastItem {
+  id: string
+  kind: ToastKind
+  message: string
+  closing: boolean
+  duration: number
+}
+
+type TourPlacement = 'top' | 'bottom'
+
+interface TourStep {
+  key: string
+  title: string
+  content: string
+}
+
 const App: React.FC = () => {
   const [serviceStatus, setServiceStatus] = useState<'idle' | 'connecting' | 'ready' | 'error'>('idle')
   const [serviceError, setServiceError] = useState<string | null>(null)
@@ -45,25 +73,75 @@ const App: React.FC = () => {
   const [isAdding, setIsAdding] = useState(false)
   const [sseStatus, setSseStatus] = useState<'connecting' | 'connected' | 'error'>('connecting')
   const [visibleCount, setVisibleCount] = useState(5)
-  const [filter, setFilter] = useState<'all' | 'active' | 'done'>('all')
+  const [filter, setFilter] = useState<'active' | 'done'>('active')
+  const [hasSnapshot, setHasSnapshot] = useState(false)
+  const [animateKey, setAnimateKey] = useState(0)
+  const [diagnosticStage, setDiagnosticStage] = useState<DiagnosticStage>('idle')
+  const [diagnosticSteps, setDiagnosticSteps] = useState<DiagnosticStep[]>([])
+  const [diagnosticResult, setDiagnosticResult] = useState<{
+    ok: boolean
+    title: string
+    detail: string
+    actions: string[]
+  } | null>(null)
+  const [progressTarget, setProgressTarget] = useState(0)
+  const [progressValue, setProgressValue] = useState(0)
+  const [diagnosticRunId, setDiagnosticRunId] = useState(0)
+  const [pendingCancel, setPendingCancel] = useState<TaskItem | null>(null)
+  const [toasts, setToasts] = useState<ToastItem[]>([])
+  const [tourMode, setTourMode] = useState<'auto' | 'manual' | null>(() => {
+    try {
+      const seen = window.localStorage.getItem('video_text_onboarding')
+      return seen ? null : 'auto'
+    } catch {
+      return 'auto'
+    }
+  })
+  const [tourStep, setTourStep] = useState(0)
+  const [tourClipPath, setTourClipPath] = useState('polygon(0 0, 100% 0, 100% 100%, 0 100%, 0 0)')
+  const [tourPlacement, setTourPlacement] = useState<TourPlacement>('bottom')
+  const [tourBubblePos, setTourBubblePos] = useState({ top: 0, left: 0 })
+  const [tourRect, setTourRect] = useState({ top: 0, left: 0, width: 0, height: 0 })
+  const [autoConnectEnabled, setAutoConnectEnabled] = useState(true)
 
   const sseRef = useRef<EventSource | null>(null)
   const reconnectTimerRef = useRef<number | null>(null)
+  const progressRef = useRef(0)
+  const toastTimersRef = useRef<Map<string, number[]>>(new Map())
+  const ensureInFlightRef = useRef<Promise<{ port: number; token: string }> | null>(null)
+  const mainRef = useRef<HTMLElement | null>(null)
+  const serviceBadgeRef = useRef<HTMLDivElement | null>(null)
+  const createButtonRef = useRef<HTMLButtonElement | null>(null)
+  const listAreaRef = useRef<HTMLDivElement | null>(null)
+  const clearQueueRef = useRef<HTMLButtonElement | null>(null)
 
   const apiBase = useMemo(() => {
     if (!servicePort) return null
     return `http://127.0.0.1:${servicePort}`
   }, [servicePort])
 
+  const tourSteps: TourStep[] = useMemo(
+    () => [
+      { key: 'status', title: '服务连接', content: '等待本地服务连接成功。' },
+      { key: 'create', title: '创建任务', content: '浏览器打开你喜欢的视频，创建转写任务。' },
+      {
+        key: 'list',
+        title: '任务进度',
+        content: '在这里查看实时任务进度与已完成的任务并下载文件。',
+      },
+      { key: 'clear', title: '清空队列', content: '点击一键清空等待中的任务。' },
+    ],
+    []
+  )
+
   const taskStats = useMemo(() => {
-    const total = tasks.length
     const inProgress = tasks.filter((task) =>
       ['queued', 'downloading', 'transcribing'].includes(task.status)
     ).length
     const done = tasks.filter((task) =>
       ['done', 'canceled', 'error'].includes(task.status)
     ).length
-    return { total, inProgress, done }
+    return { inProgress, done }
   }, [tasks])
 
   const filteredTasks = useMemo(() => {
@@ -73,9 +151,15 @@ const App: React.FC = () => {
       )
     }
     if (filter === 'done') {
-      return tasks.filter((task) => ['done', 'canceled', 'error'].includes(task.status))
+      const completed = tasks.filter((task) => ['done', 'canceled', 'error'].includes(task.status))
+      completed.sort((a, b) => b.createdAt - a.createdAt)
+      return completed
     }
-    return tasks
+    const active = tasks.filter((task) =>
+      ['queued', 'downloading', 'transcribing'].includes(task.status)
+    )
+    active.sort((a, b) => b.createdAt - a.createdAt)
+    return active
   }, [tasks, filter])
 
   const visibleTasks = useMemo(
@@ -85,7 +169,108 @@ const App: React.FC = () => {
 
   useEffect(() => {
     setVisibleCount(5)
+    setAnimateKey((prev) => prev + 1)
   }, [filter])
+
+  useEffect(() => {
+    progressRef.current = progressValue
+  }, [progressValue])
+
+  useEffect(() => {
+    const from = progressRef.current
+    const to = progressTarget
+    if (from === to) return
+    const duration = 420
+    const start = performance.now()
+    let raf = 0
+    const tick = (now: number) => {
+      const elapsed = Math.min((now - start) / duration, 1)
+      const next = Math.round(from + (to - from) * elapsed)
+      setProgressValue(next)
+      if (elapsed < 1) {
+        raf = window.requestAnimationFrame(tick)
+      }
+    }
+    raf = window.requestAnimationFrame(tick)
+    return () => window.cancelAnimationFrame(raf)
+  }, [progressTarget])
+
+  useEffect(() => {
+    if (tourMode !== 'auto') return
+    try {
+      window.localStorage.setItem('video_text_onboarding', '1')
+    } catch {
+      // ignore
+    }
+  }, [tourMode])
+
+  useEffect(() => {
+    if (!tourMode) return
+    if (tourStep === 2) {
+      setFilter('active')
+    }
+  }, [tourMode, tourStep])
+
+  useEffect(() => {
+    if (!tourMode) return
+    const updateLayout = () => {
+      const step = tourSteps[tourStep]
+      if (!step) return
+      const target =
+        step.key === 'status'
+          ? serviceBadgeRef.current
+          : step.key === 'create'
+            ? createButtonRef.current
+            : step.key === 'list'
+              ? listAreaRef.current
+              : step.key === 'clear'
+                ? clearQueueRef.current
+                : null
+      if (!target) return
+      const rect = target.getBoundingClientRect()
+      const padding = 8
+      const viewportWidth = window.innerWidth
+      const viewportHeight = window.innerHeight
+      const left = Math.max(rect.left - padding, 0)
+      const top = Math.max(rect.top - padding, 0)
+      const right = Math.min(rect.right + padding, viewportWidth)
+      const bottom = Math.min(rect.bottom + padding, viewportHeight)
+      const clipPath = `polygon(0 0, ${viewportWidth}px 0, ${viewportWidth}px ${viewportHeight}px, 0 ${viewportHeight}px, 0 0, ${left}px ${top}px, ${right}px ${top}px, ${right}px ${bottom}px, ${left}px ${bottom}px, ${left}px ${top}px)`
+      setTourClipPath(clipPath)
+      setTourRect({ top, left, width: right - left, height: bottom - top })
+      const centerX = left + (right - left) / 2
+      const bubbleWidth = 280
+      const safeLeft = Math.min(Math.max(centerX, bubbleWidth / 2 + 16), viewportWidth - bubbleWidth / 2 - 16)
+      const bottomSpace = viewportHeight - bottom
+      const topSpace = top
+      let placement: TourPlacement = 'bottom'
+      if (topSpace > bottomSpace && topSpace > 160) {
+        placement = 'top'
+      }
+      setTourPlacement(placement)
+      setTourBubblePos({
+        top: placement === 'bottom' ? bottom + 16 : top - 16,
+        left: safeLeft,
+      })
+    }
+    updateLayout()
+    const handleScroll = () => updateLayout()
+    window.addEventListener('resize', updateLayout)
+    window.addEventListener('scroll', handleScroll, true)
+    return () => {
+      window.removeEventListener('resize', updateLayout)
+      window.removeEventListener('scroll', handleScroll, true)
+    }
+  }, [tourMode, tourStep, tourSteps, filter])
+
+  useEffect(() => {
+    return () => {
+      toastTimersRef.current.forEach((timers) =>
+        timers.forEach((timer) => window.clearTimeout(timer))
+      )
+      toastTimersRef.current.clear()
+    }
+  }, [])
 
   const connectNative = () => {
     return new Promise<{ port: number; token: string }>((resolve, reject) => {
@@ -104,6 +289,22 @@ const App: React.FC = () => {
           resolve({ port: response.port, token: response.token })
         }
       )
+    })
+  }
+
+  const sendNative = (type: 'getStatus' | 'ensureRunning' | 'shutdown') => {
+    return new Promise<any>((resolve, reject) => {
+      chrome.runtime.sendNativeMessage(NATIVE_HOST_NAME, { type }, (response) => {
+        if (chrome.runtime.lastError) {
+          reject(new Error(chrome.runtime.lastError.message))
+          return
+        }
+        if (!response?.ok) {
+          reject(new Error(response?.error || 'native_error'))
+          return
+        }
+        resolve(response)
+      })
     })
   }
 
@@ -133,6 +334,7 @@ const App: React.FC = () => {
       const data = (await response.json()) as TasksSnapshot
       setTasks(data.tasks)
       setActiveTaskId(data.activeTaskId)
+      setHasSnapshot(true)
     } catch (error) {
       console.error(error)
     }
@@ -153,6 +355,7 @@ const App: React.FC = () => {
         setTasks(data.tasks)
         setActiveTaskId(data.activeTaskId)
         setSseStatus('connected')
+        setHasSnapshot(true)
       } catch (error) {
         console.error(error)
       }
@@ -170,22 +373,38 @@ const App: React.FC = () => {
   }
 
   const ensureService = async () => {
+    if (tourMode === 'auto') {
+      throw new Error('tour_active')
+    }
+    if (ensureInFlightRef.current) {
+      return ensureInFlightRef.current
+    }
+    setAutoConnectEnabled(true)
     setServiceStatus('connecting')
     setServiceError(null)
-    try {
-      const result = await connectNative()
-      setServicePort(result.port)
-      setServiceToken(result.token)
-      setServiceStatus('ready')
-      return result
-    } catch (error: any) {
-      setServiceStatus('error')
-      setServiceError(error.message || '本地服务不可用')
-      throw error
-    }
+    const request = (async () => {
+      try {
+        const result = await connectNative()
+        setServicePort(result.port)
+        setServiceToken(result.token)
+        setServiceStatus('ready')
+        return result
+      } catch (error: any) {
+        setServiceStatus('error')
+        setServiceError(error.message || '本地服务不可用')
+        throw error
+      } finally {
+        ensureInFlightRef.current = null
+      }
+    })()
+    ensureInFlightRef.current = request
+    return request
   }
 
   useEffect(() => {
+    if (tourMode === 'auto') return
+    if (!autoConnectEnabled) return
+    if (serviceStatus !== 'idle') return
     ensureService().catch(() => undefined)
     return () => {
       if (sseRef.current) {
@@ -195,13 +414,18 @@ const App: React.FC = () => {
         window.clearTimeout(reconnectTimerRef.current)
       }
     }
-  }, [])
+  }, [tourMode, serviceStatus, autoConnectEnabled])
 
   useEffect(() => {
-    if (!apiBase || !serviceToken) return
+    if (!apiBase || !serviceToken || tourMode === 'auto') return
     refreshTasks()
     startSse()
-  }, [apiBase, serviceToken])
+    return () => {
+      if (sseRef.current) {
+        sseRef.current.close()
+      }
+    }
+  }, [apiBase, serviceToken, tourMode])
 
   useEffect(() => {
     const inProgress = tasks.filter((task) =>
@@ -259,7 +483,32 @@ const App: React.FC = () => {
     })
   }
 
+  const closeToast = (id: string) => {
+    setToasts((prev) => prev.map((toast) => (toast.id === id ? { ...toast, closing: true } : toast)))
+    const timers = toastTimersRef.current.get(id) || []
+    timers.forEach((timer) => window.clearTimeout(timer))
+    const removeTimer = window.setTimeout(() => {
+      setToasts((prev) => prev.filter((toast) => toast.id !== id))
+      toastTimersRef.current.delete(id)
+    }, 500)
+    toastTimersRef.current.set(id, [removeTimer])
+  }
+
+  const showToast = (kind: ToastKind, message: string, duration = 4000) => {
+    const id = `${Date.now()}-${Math.random().toString(16).slice(2)}`
+    setToasts((prev) => [...prev, { id, kind, message, closing: false, duration }])
+    const exitTimer = window.setTimeout(() => closeToast(id), duration)
+    toastTimersRef.current.set(id, [exitTimer])
+  }
+
+  const guardTourAction = (message = '请先完成新手引导') => {
+    if (tourMode !== 'auto') return false
+    showToast('info', message)
+    return true
+  }
+
   const handleAddTask = async () => {
+    if (guardTourAction()) return
     setIsAdding(true)
     try {
       if (serviceStatus !== 'ready') {
@@ -281,23 +530,34 @@ const App: React.FC = () => {
       })
       await refreshTasks()
     } catch (error: any) {
-      alert(error.message || '添加任务失败')
+      showToast('error', error.message || '添加任务失败')
     } finally {
       setIsAdding(false)
     }
   }
 
-  const handleCancel = async (task: TaskItem) => {
-    if (!window.confirm('确认取消该任务？')) return
+  const handleCancel = (task: TaskItem) => {
+    setPendingCancel(task)
+  }
+
+  const confirmCancel = async () => {
+    if (guardTourAction()) {
+      setPendingCancel(null)
+      return
+    }
+    const task = pendingCancel
+    if (!task) return
+    setPendingCancel(null)
     try {
       await apiFetch(`/api/tasks/${task.id}/cancel`, { method: 'POST' })
       await refreshTasks()
     } catch (error: any) {
-      alert(error.message || '取消失败')
+      showToast('error', error.message || '取消失败')
     }
   }
 
   const handleRetry = async (task: TaskItem) => {
+    if (guardTourAction()) return
     try {
       if (task.errorCode === 'cookies_required') {
         const cookies = await collectCookies(task.url)
@@ -309,20 +569,22 @@ const App: React.FC = () => {
       await apiFetch(`/api/tasks/${task.id}/retry`, { method: 'POST' })
       await refreshTasks()
     } catch (error: any) {
-      alert(error.message || '重试失败')
+      showToast('error', error.message || '重试失败')
     }
   }
 
   const handleDelete = async (task: TaskItem) => {
+    if (guardTourAction()) return
     try {
       await apiFetch(`/api/tasks/${task.id}`, { method: 'DELETE' })
       await refreshTasks()
     } catch (error: any) {
-      alert(error.message || '删除失败')
+      showToast('error', error.message || '删除失败')
     }
   }
 
   const handleClearQueue = async () => {
+    if (guardTourAction()) return
     try {
       await apiFetch('/api/tasks/clear', {
         method: 'POST',
@@ -330,7 +592,7 @@ const App: React.FC = () => {
       })
       await refreshTasks()
     } catch (error: any) {
-      alert(error.message || '清空队列失败')
+      showToast('error', error.message || '清空队列失败')
     }
   }
 
@@ -339,7 +601,173 @@ const App: React.FC = () => {
     setVisibleCount(nextCount)
   }
 
+  const handleReconnect = async () => {
+    if (guardTourAction()) return
+    try {
+      setAutoConnectEnabled(true)
+      await ensureService()
+    } catch (error: any) {
+      if (error?.message === 'tour_active') return
+      showToast('error', error?.message || '连接失败')
+    }
+  }
+
+  const handleStopService = async () => {
+    if (guardTourAction()) return
+    try {
+      await sendNative('shutdown')
+      setServiceStatus('idle')
+      setServiceError(null)
+      setServicePort(null)
+      setServiceToken(null)
+      setSseStatus('connecting')
+      setAutoConnectEnabled(false)
+      if (sseRef.current) {
+        sseRef.current.close()
+        sseRef.current = null
+      }
+      showToast('success', '已停止本地服务')
+    } catch (error: any) {
+      showToast('error', error?.message || '停止服务失败')
+    }
+  }
+
+  const startTour = () => {
+    setTourStep(0)
+    setTourMode('manual')
+  }
+
+  const closeTour = () => {
+    const wasAuto = tourMode === 'auto'
+    setTourMode(null)
+    setTourStep(0)
+    if (wasAuto) {
+      ensureService().catch(() => undefined)
+    }
+  }
+
+  const prevTour = () => {
+    setTourStep((prev) => Math.max(prev - 1, 0))
+  }
+
+  const nextTour = () => {
+    if (tourStep >= tourSteps.length - 1) {
+      closeTour()
+      return
+    }
+    setTourStep((prev) => prev + 1)
+  }
+
+  const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms))
+
+  const updateStepStatus = (id: string, status: DiagnosticStatus) => {
+    setDiagnosticSteps((prev) => prev.map((step) => (step.id === id ? { ...step, status } : step)))
+  }
+
+  const finalizeDiagnostic = (ok: boolean, title: string, detail: string, actions: string[]) => {
+    setDiagnosticResult({ ok, title, detail, actions })
+    setDiagnosticStage('result')
+    setProgressTarget(100)
+  }
+
+  const runDiagnostics = async () => {
+    if (guardTourAction()) return
+    const steps: DiagnosticStep[] = [
+      { id: 'native', label: '检查 Native Host 连接', status: 'pending' },
+      { id: 'service', label: '检查本地服务启动', status: 'pending' },
+      { id: 'health', label: '检查服务健康状态', status: 'pending' },
+      { id: 'token', label: '验证鉴权 Token', status: 'pending' },
+    ]
+    setDiagnosticRunId((prev) => prev + 1)
+    setDiagnosticSteps(steps)
+    setDiagnosticResult(null)
+    setProgressValue(0)
+    setProgressTarget(0)
+    setDiagnosticStage('running')
+
+    const totalSteps = steps.length
+    let currentPort: number | null = null
+    let currentToken: string | null = null
+
+    try {
+      updateStepStatus('native', 'running')
+      await sleep(900)
+      await sendNative('getStatus')
+      updateStepStatus('native', 'done')
+      setProgressTarget(Math.round((1 / totalSteps) * 100))
+
+      updateStepStatus('service', 'running')
+      await sleep(1100)
+      const ensure = await sendNative('ensureRunning')
+      currentPort = ensure.port
+      currentToken = ensure.token
+      updateStepStatus('service', 'done')
+      setProgressTarget(Math.round((2 / totalSteps) * 100))
+
+      updateStepStatus('health', 'running')
+      await sleep(900)
+      const health = await fetch(`http://127.0.0.1:${currentPort}/health`)
+      if (!health.ok) {
+        throw new Error('health_failed')
+      }
+      updateStepStatus('health', 'done')
+      setProgressTarget(Math.round((3 / totalSteps) * 100))
+
+      updateStepStatus('token', 'running')
+      await sleep(1000)
+      const auth = await fetch(`http://127.0.0.1:${currentPort}/api/tasks`, {
+        headers: { Authorization: `Bearer ${currentToken}` },
+      })
+      if (auth.status === 401) {
+        throw new Error('token_mismatch')
+      }
+      if (!auth.ok) {
+        throw new Error('token_check_failed')
+      }
+      updateStepStatus('token', 'done')
+      setProgressTarget(100)
+
+      finalizeDiagnostic(true, '诊断通过', '本地服务与 Native Host 工作正常。', [
+        '可以返回任务面板继续使用',
+      ])
+    } catch (error: any) {
+      const message = error?.message || '诊断失败'
+      if (message === 'native_error' || message.includes('Native host')) {
+        updateStepStatus('native', 'fail')
+        finalizeDiagnostic(false, 'Native Host 未连接', '无法与本地伴随程序建立连接。', [
+          '确认已执行安装脚本并填写正确扩展 ID',
+          '检查 manifest path 是否指向 host-macos.sh',
+          '确认脚本具备可执行权限',
+        ])
+        return
+      }
+      if (message === 'service_start_failed' || message === 'health_failed') {
+        updateStepStatus('service', 'fail')
+        finalizeDiagnostic(false, '本地服务启动失败', '服务未能成功启动或健康检查失败。', [
+          '确认端口未被占用（默认 8001）',
+          '确认 Python 环境与依赖已安装',
+          '查看 native-host.log 获取启动信息',
+        ])
+        return
+      }
+      if (message === 'token_mismatch' || message === 'token_missing') {
+        updateStepStatus('token', 'fail')
+        finalizeDiagnostic(false, 'Token 校验失败', '服务已启动，但鉴权 token 不一致。', [
+          '删除 service.token 后重启服务',
+          '确认 host 与服务使用同一 token 路径',
+        ])
+        return
+      }
+      updateStepStatus('health', 'fail')
+      finalizeDiagnostic(false, '诊断未通过', '未能完成全部检查步骤。', [
+        '查看 native-host.log 获取详细信息',
+        '尝试重新连接或重启服务',
+      ])
+    }
+  }
+
   const handleDownload = (task: TaskItem) => {
+    if (guardTourAction()) return
     if (!apiBase || !serviceToken) return
     const url = `${apiBase}/api/tasks/${task.id}/result?token=${encodeURIComponent(serviceToken)}`
     chrome.downloads.download({
@@ -384,6 +812,10 @@ const App: React.FC = () => {
     }
   }
 
+  const activeTour = tourSteps[tourStep]
+  const isFirstTourStep = tourStep === 0
+  const isLastTourStep = tourStep === tourSteps.length - 1
+
   return (
     <div className="flex flex-col h-screen bg-[#F8FAFC] text-slate-900 font-sans overflow-hidden select-none relative">
       <div className="absolute inset-0 pointer-events-none opacity-40">
@@ -396,36 +828,164 @@ const App: React.FC = () => {
           <h1 className="text-base font-extrabold tracking-tight text-slate-800">转写任务面板</h1>
           <p className="text-[11px] text-indigo-500 font-black tracking-widest uppercase">Local Queue</p>
         </div>
-        <div
-          className={`px-3 py-1.5 rounded-2xl text-[10px] font-black tracking-wider shadow-sm border ${
-            serviceStatus === 'ready'
-              ? 'bg-white text-emerald-600 border-emerald-100'
-              : serviceStatus === 'connecting'
-                ? 'bg-white text-indigo-500 border-indigo-100'
-                : 'bg-white text-rose-500 border-rose-100'
-          }`}
-        >
-          {serviceStatus === 'ready' ? '服务已连接' : serviceStatus === 'connecting' ? '连接中' : '服务未连接'}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={startTour}
+            className="rounded-full border border-indigo-100 px-3 py-1 text-[10px] font-bold text-indigo-500 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-sm hover:text-indigo-600"
+          >
+            新手引导
+          </button>
+          {serviceStatus === 'ready' && (
+            <button
+              onClick={handleStopService}
+              className="inline-flex items-center gap-1 rounded-full border border-rose-100 px-3 py-1 text-[10px] font-bold text-rose-500 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-sm hover:text-rose-600"
+            >
+              <Power size={12} />
+              停止服务
+            </button>
+          )}
+          <div
+            ref={serviceBadgeRef}
+            className={`px-3 py-1.5 rounded-2xl text-[10px] font-black tracking-wider shadow-sm border ${
+              serviceStatus === 'ready'
+                ? 'bg-white text-emerald-600 border-emerald-100'
+                : serviceStatus === 'connecting'
+                  ? 'bg-white text-indigo-500 border-indigo-100'
+                  : 'bg-white text-rose-500 border-rose-100'
+            }`}
+          >
+            {serviceStatus === 'ready' ? '服务已连接' : serviceStatus === 'connecting' ? '连接中' : '服务未连接'}
+          </div>
         </div>
       </header>
 
-      <main className="flex-1 overflow-y-auto px-6 py-6 relative z-10">
-        {serviceStatus === 'error' && (
-          <div className="mb-6 rounded-3xl border border-rose-100 bg-rose-50/80 p-4 text-rose-600 text-sm shadow-sm">
-            <div className="flex items-start gap-3">
-              <WarningCircle size={18} className="mt-0.5" />
-              <div>
-                <p className="font-semibold">本地服务未就绪</p>
-                <p className="text-xs text-rose-500 mt-1">{serviceError || '请检查本地服务与 Native Host 安装。'}</p>
+      <main ref={mainRef} className="flex-1 overflow-y-auto px-6 py-6 relative z-10">
+        {(serviceStatus === 'error' || diagnosticStage !== 'idle') && (
+          <div className="mb-6 rounded-[24px] bg-slate-50 p-5 shadow-sm list-entry">
+            {diagnosticStage === 'idle' && (
+              <div className="flex flex-col items-center justify-center text-center">
+                <div className="text-sm font-semibold text-slate-700">诊断工具</div>
+                <p className="mt-1 text-xs text-slate-400">
+                  一键检查本地伴随程序与服务状态，定位问题原因。
+                </p>
+                {serviceStatus === 'error' && (
+                  <div className="mt-3 flex items-center gap-2 rounded-full bg-rose-50 px-3 py-1 text-[11px] text-rose-500">
+                    <WarningCircle size={12} />
+                    <span className="font-semibold">本地服务未就绪</span>
+                    <span className="text-rose-400">
+                      {serviceError || '请检查本地服务与 Native Host 安装。'}
+                    </span>
+                  </div>
+                )}
+                <div className="mt-4 flex items-center gap-2">
                 <button
-                  onClick={ensureService}
-                  className="mt-3 inline-flex items-center gap-2 rounded-full bg-rose-600 px-3 py-1.5 text-white text-xs font-bold transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
+                  onClick={runDiagnostics}
+                  className="inline-flex items-center gap-2 rounded-full bg-indigo-600 px-4 py-2 text-white text-xs font-bold transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
                 >
-                  <ArrowClockwise size={14} />
-                  重新连接
+                  开始诊断
+                </button>
+                {serviceStatus === 'error' && (
+                  <button
+                    onClick={handleReconnect}
+                    className="inline-flex items-center gap-2 rounded-full border border-rose-200 bg-white px-4 py-2 text-rose-500 text-xs font-bold transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
+                  >
+                    <ArrowClockwise size={14} />
+                    重新连接
+                  </button>
+                )}
+                </div>
+              </div>
+            )}
+
+            {diagnosticStage === 'running' && (
+              <div className="flex gap-5">
+                <div className="relative h-24 w-24 shrink-0">
+                  {(() => {
+                    const radius = 36
+                    const circumference = 2 * Math.PI * radius
+                    const offset = circumference - (progressValue / 100) * circumference
+                    return (
+                      <svg width="96" height="96" className="block">
+                        <circle
+                          cx="48"
+                          cy="48"
+                          r={radius}
+                          stroke="#E2E8F0"
+                          strokeWidth="8"
+                          fill="none"
+                        />
+                        <circle
+                          cx="48"
+                          cy="48"
+                          r={radius}
+                          stroke="#4F46E5"
+                          strokeWidth="8"
+                          strokeDasharray={`${circumference} ${circumference}`}
+                          strokeDashoffset={offset}
+                          fill="none"
+                          strokeLinecap="round"
+                          style={{ transition: 'stroke-dashoffset 0.35s ease' }}
+                        />
+                      </svg>
+                    )
+                  })()}
+                  <div className="absolute inset-0 flex items-center justify-center text-lg font-black text-slate-700">
+                    {progressValue}%
+                  </div>
+                </div>
+                <div className="flex-1 space-y-2">
+                  {diagnosticSteps
+                    .filter((step) => step.status !== 'pending')
+                    .map((step) => (
+                      <div
+                        key={`${diagnosticRunId}-${step.id}`}
+                        className="diag-log flex items-center gap-2 text-xs"
+                      >
+                        {step.status === 'running' && <span className="diag-dot" />}
+                        {step.status === 'done' && (
+                          <CheckCircle size={14} className="diag-check text-emerald-500" />
+                        )}
+                        {step.status === 'fail' && (
+                          <WarningCircle size={14} className="text-rose-500" />
+                        )}
+                        <span
+                          className={`${
+                            step.status === 'done' ? 'text-slate-400' : 'text-slate-600'
+                          }`}
+                        >
+                          {step.label}
+                        </span>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            )}
+
+            {diagnosticStage === 'result' && diagnosticResult && (
+              <div className="flex flex-col gap-3">
+                <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                  <CheckCircle
+                    size={16}
+                    className={diagnosticResult.ok ? 'text-emerald-500' : 'text-rose-500'}
+                  />
+                  {diagnosticResult.title}
+                </div>
+                <p className="text-xs text-slate-500">{diagnosticResult.detail}</p>
+                {diagnosticResult.actions.length > 0 && (
+                  <ul className="space-y-1 text-[11px] text-slate-400">
+                    {diagnosticResult.actions.map((action) => (
+                      <li key={action}>• {action}</li>
+                    ))}
+                  </ul>
+                )}
+                <button
+                  onClick={() => setDiagnosticStage('idle')}
+                  className="mt-2 inline-flex items-center justify-center rounded-full border border-slate-200 px-4 py-1.5 text-xs font-semibold text-slate-600 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
+                >
+                  返回
                 </button>
               </div>
-            </div>
+            )}
           </div>
         )}
 
@@ -433,6 +993,7 @@ const App: React.FC = () => {
           <button
             onClick={handleAddTask}
             disabled={serviceStatus !== 'ready' || isAdding}
+            ref={createButtonRef}
             className="flex items-center gap-2 rounded-2xl bg-indigo-600 px-4 py-2 text-white text-sm font-bold shadow-lg shadow-indigo-600/20 disabled:opacity-50 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-indigo-600/40"
           >
             {isAdding ? <ArrowClockwise size={16} className="animate-spin" /> : <Plus size={16} />}
@@ -440,6 +1001,7 @@ const App: React.FC = () => {
           </button>
           <button
             onClick={handleClearQueue}
+            ref={clearQueueRef}
             className="text-xs font-bold text-slate-500 transition-all duration-200 hover:text-slate-700 hover:-translate-y-0.5"
           >
             清空队列
@@ -450,7 +1012,6 @@ const App: React.FC = () => {
           <div className="flex items-stretch text-xs font-semibold">
           {(
             [
-              { key: 'all', label: '全部', value: taskStats.total },
               { key: 'active', label: '进行中', value: taskStats.inProgress },
               { key: 'done', label: '已完成', value: taskStats.done },
             ] as const
@@ -478,17 +1039,36 @@ const App: React.FC = () => {
           ))}
           </div>
         </div>
-        <div className="flex justify-end mb-2 text-[11px] text-slate-400">
-          <span>{sseStatus === 'connected' ? '实时更新' : sseStatus === 'connecting' ? '连接中' : '连接中断'}</span>
-        </div>
 
-        <div className="space-y-4 pb-6">
-          {filteredTasks.length === 0 && (
+
+        <div ref={listAreaRef} className="space-y-4 pb-6">
+          {serviceStatus === 'ready' && !hasSnapshot && (
+            <>
+              {Array.from({ length: 3 }).map((_, index) => (
+                <div
+                  key={`skeleton-${index}`}
+                  className="rounded-3xl border border-white bg-white/80 p-5 shadow-sm"
+                >
+                  <div className="space-y-3">
+                    <div className="skeleton h-4 w-3/4 rounded-full" />
+                    <div className="skeleton h-3 w-1/2 rounded-full" />
+                  </div>
+                  <div className="mt-5 space-y-4">
+                    <div className="skeleton h-2 w-full rounded-full" />
+                    <div className="skeleton h-2 w-4/5 rounded-full" />
+                  </div>
+                </div>
+              ))}
+            </>
+          )}
+          {serviceStatus === 'ready' && hasSnapshot && filteredTasks.length === 0 && (
             <div className="rounded-3xl border border-white bg-white/70 p-8 text-center text-slate-400 text-sm">
               暂无任务，打开视频页面后点击“创建转写任务”。
             </div>
           )}
-          {visibleTasks.map((task) => {
+          {serviceStatus === 'ready' &&
+            hasSnapshot &&
+            visibleTasks.map((task, index) => {
             const isActive =
               task.status === 'queued' ||
               task.status === 'downloading' ||
@@ -501,10 +1081,11 @@ const App: React.FC = () => {
             const transcribeDone = task.transcribeProgress >= 100
             return (
               <div
-                key={task.id}
-                className={`relative rounded-3xl border border-white bg-white/80 p-5 shadow-sm ${
+                key={`${task.id}-${animateKey}`}
+                className={`task-card list-entry relative rounded-3xl border border-white bg-white/80 p-5 shadow-sm ${
                   isCurrent ? 'ring-2 ring-indigo-200 shadow-md' : ''
                 } ${isWaiting ? 'opacity-60' : ''}`}
+                style={{ animationDelay: `${0.05 + index * 0.07}s` }}
               >
                 {isActive && (
                   <button
@@ -639,6 +1220,112 @@ const App: React.FC = () => {
           </button>
         )}
       </main>
+
+      {tourMode && activeTour && (
+        <div className="tour-layer">
+          <div className="tour-overlay" style={{ clipPath: tourClipPath }} />
+          <div
+            className="tour-spotlight"
+            style={{
+              top: tourRect.top,
+              left: tourRect.left,
+              width: tourRect.width,
+              height: tourRect.height,
+            }}
+          />
+          <div
+            className={`tour-bubble tour-${tourPlacement}`}
+            style={{ top: tourBubblePos.top, left: tourBubblePos.left }}
+          >
+            <div key={activeTour.key} className="tour-bubble-inner">
+              <span className={`tour-arrow tour-arrow-${tourPlacement}`} />
+              <div className="tour-header">
+                <div className="tour-title">{activeTour.title}</div>
+                <button className="tour-skip" onClick={closeTour}>
+                  跳过
+                </button>
+              </div>
+              <div className="tour-content">{activeTour.content}</div>
+              <div className="tour-footer">
+                <span className="tour-step">
+                  {tourStep + 1}/{tourSteps.length}
+                </span>
+                <div className="tour-actions">
+                  <button
+                    className="tour-btn tour-btn-ghost"
+                    onClick={prevTour}
+                    disabled={isFirstTourStep}
+                  >
+                    上一步
+                  </button>
+                  <button className="tour-btn tour-btn-primary" onClick={nextTour}>
+                    {isLastTourStep ? '完成' : '下一步'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="toast-container">
+        {toasts.map((toast) => (
+          <div
+            key={toast.id}
+            className={`toast-item toast-${toast.kind} ${toast.closing ? 'toast-exit' : 'toast-enter'}`}
+            style={{ '--toast-duration': `${toast.duration}ms` } as React.CSSProperties}
+          >
+            <div className="toast-body">
+              {toast.kind === 'error' ? (
+                <WarningCircle size={16} />
+              ) : toast.kind === 'success' ? (
+                <CheckCircle size={16} />
+              ) : (
+                <Clock size={16} />
+              )}
+              <span className="toast-text">{toast.message}</span>
+              <button className="toast-close" onClick={() => closeToast(toast.id)}>
+                <X size={12} />
+              </button>
+            </div>
+            <div className="toast-progress" />
+          </div>
+        ))}
+      </div>
+
+      {pendingCancel && (
+        <div
+          className="fixed inset-0 z-30 flex items-center justify-center bg-black/30 backdrop-blur-sm"
+          onClick={() => setPendingCancel(null)}
+        >
+          <div
+            className="w-[90%] max-w-sm rounded-3xl bg-white p-5 shadow-xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-center gap-2 text-sm font-semibold text-slate-800">
+              <WarningCircle size={16} className="text-rose-500" />
+              确认取消任务？
+            </div>
+            <p className="mt-2 text-xs text-slate-500 break-words">
+              {pendingCancel.title || pendingCancel.url}
+            </p>
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                onClick={() => setPendingCancel(null)}
+                className="inline-flex items-center justify-center rounded-full border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
+              >
+                返回
+              </button>
+              <button
+                onClick={confirmCancel}
+                className="inline-flex items-center justify-center rounded-full bg-rose-500 px-4 py-2 text-xs font-semibold text-white transition-all duration-200 hover:-translate-y-0.5 hover:bg-rose-600 hover:shadow-md"
+              >
+                确认取消
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
