@@ -47,33 +47,6 @@ TEMP_DIR.mkdir(exist_ok=True)
 DB_PATH = Path(os.getenv("TRANSCRIBER_DB_PATH", str(TEMP_DIR / "tasks.db")))
 SERVICE_LOG_PATH = Path(os.getenv("TRANSCRIBER_SERVICE_LOG", str(TEMP_DIR / "service.log")))
 
-MODEL_SIZE = os.getenv("WHISPER_MODEL", "tiny")
-WHISPER_DEVICE = os.getenv("WHISPER_DEVICE", "cpu")
-WHISPER_COMPUTE = os.getenv("WHISPER_COMPUTE", "int8")
-IDLE_SECONDS = int(os.getenv("TRANSCRIBER_IDLE_SECONDS", "600"))
-
-SERVICE_PORT = int(os.getenv("TRANSCRIBER_PORT", "8001"))
-SERVICE_TOKEN = os.getenv("TRANSCRIBER_TOKEN")
-TOKEN_PATH = Path(os.getenv("TRANSCRIBER_TOKEN_PATH", str(TEMP_DIR / "service.token")))
-
-if not SERVICE_TOKEN:
-    SERVICE_TOKEN = uuid.uuid4().hex
-    try:
-        TOKEN_PATH.write_text(SERVICE_TOKEN, encoding="utf-8")
-        os.chmod(TOKEN_PATH, 0o600)
-    except OSError:
-        pass
-
-whisper_model = WhisperModel(
-    MODEL_SIZE,
-    device=WHISPER_DEVICE,
-    compute_type=WHISPER_COMPUTE,
-    cpu_threads=CPU_THREADS,
-    num_workers=1,
-)
-OPENCC_T2S = OpenCC("t2s") if OpenCC else None
-
-
 def _log(message: str) -> None:
     try:
         SERVICE_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -82,6 +55,80 @@ def _log(message: str) -> None:
             handle.write(f"{timestamp} {message}\n")
     except OSError:
         pass
+
+
+def _log_slow(label: str, start: float, extra: str = "") -> None:
+    elapsed = time.monotonic() - start
+    if elapsed >= SLOW_LOG_SECONDS:
+        suffix = f" {extra}".strip()
+        _log(f"SLOW {label} elapsed={elapsed:.2f}s {suffix}".strip())
+
+MODEL_SIZE = os.getenv("WHISPER_MODEL", "tiny")
+WHISPER_DEVICE = os.getenv("WHISPER_DEVICE", "cpu")
+WHISPER_COMPUTE = os.getenv("WHISPER_COMPUTE", "int8")
+IDLE_SECONDS = int(os.getenv("TRANSCRIBER_IDLE_SECONDS", "600"))
+SLOW_LOG_SECONDS = float(os.getenv("TRANSCRIBER_SLOW_LOG_SECONDS", "5"))
+
+SERVICE_PORT = int(os.getenv("TRANSCRIBER_PORT", "8001"))
+SERVICE_TOKEN = os.getenv("TRANSCRIBER_TOKEN")
+TOKEN_PATH = Path(os.getenv("TRANSCRIBER_TOKEN_PATH", str(TEMP_DIR / "service.token")))
+
+_log(
+    "SERVICE_START "
+    f"pid={os.getpid()} base_dir={BASE_DIR} temp_dir={TEMP_DIR} port={SERVICE_PORT}"
+)
+
+if not SERVICE_TOKEN:
+    SERVICE_TOKEN = uuid.uuid4().hex
+
+token_source = "env" if os.getenv("TRANSCRIBER_TOKEN") else "auto"
+_log(f"TOKEN_INIT source={token_source} path={TOKEN_PATH}")
+try:
+    TOKEN_PATH.parent.mkdir(parents=True, exist_ok=True)
+    TOKEN_PATH.write_text(SERVICE_TOKEN, encoding="utf-8")
+    os.chmod(TOKEN_PATH, 0o600)
+    _log("TOKEN_WRITE ok")
+except OSError as exc:
+    _log(f"TOKEN_WRITE failed error={exc}")
+
+model_lock = threading.Lock()
+whisper_model = None
+model_ready = False
+model_loading = False
+model_error = None
+
+def _detect_model_cache() -> Optional[Path]:
+    override = os.getenv("WHISPER_MODEL_DIR") or os.getenv("WHISPER_CACHE_DIR")
+    if override:
+        candidate = Path(override)
+        if candidate.exists():
+            return candidate
+    try:
+        from faster_whisper.utils import get_downloaded_model_path
+
+        candidate = Path(get_downloaded_model_path(MODEL_SIZE))
+        if candidate.exists():
+            return candidate
+    except Exception:
+        pass
+    home = Path.home()
+    candidates = [
+        home / ".cache" / "whisper" / MODEL_SIZE,
+        home / ".cache" / "whisper" / f"{MODEL_SIZE}-ct2",
+        home / ".cache" / "faster-whisper" / MODEL_SIZE,
+        home / ".cache" / "faster-whisper" / f"{MODEL_SIZE}-ct2",
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return None
+
+MODEL_CACHE_PATH = _detect_model_cache()
+MODEL_CACHED = MODEL_CACHE_PATH is not None
+_log(f"MODEL_CACHE cached={MODEL_CACHED} path={MODEL_CACHE_PATH}")
+_log("MODEL_LAZY_LOAD enabled=true")
+
+OPENCC_T2S = OpenCC("t2s") if OpenCC else None
 
 app.add_middleware(
     CORSMiddleware,
@@ -141,6 +188,23 @@ def health_check():
     return {"status": "ok"}
 
 
+@app.get("/api/status")
+def service_status(request: Request, token: Optional[str] = Query(None)):
+    _require_token(request, token)
+    return {
+        "status": "ok",
+        "modelCached": MODEL_CACHED,
+        "modelReady": model_ready,
+        "modelLoading": model_loading,
+        "modelError": model_error,
+    }
+
+
+@app.on_event("startup")
+def _on_startup() -> None:
+    _log("HTTP_READY")
+
+
 def _require_token(request: Request, token: Optional[str]) -> None:
     header = request.headers.get("authorization", "")
     if header.lower().startswith("bearer "):
@@ -171,6 +235,51 @@ def _to_simplified(text: str) -> str:
         return OPENCC_T2S.convert(text)
     except Exception:
         return text
+
+
+def _get_whisper_model() -> WhisperModel:
+    global whisper_model, model_ready, model_loading, model_error
+    wait_logged = False
+    while True:
+        with model_lock:
+            if whisper_model is not None:
+                return whisper_model
+            if not model_loading:
+                model_loading = True
+                model_error = None
+                break
+            if not wait_logged:
+                wait_logged = True
+        if wait_logged:
+            _log("MODEL_INIT_WAIT")
+        time.sleep(0.1)
+    start = time.monotonic()
+    _log(
+        "MODEL_INIT_START "
+        f"size={MODEL_SIZE} device={WHISPER_DEVICE} compute={WHISPER_COMPUTE} "
+        f"cpu_threads={CPU_THREADS} num_workers=1"
+    )
+    try:
+        model = WhisperModel(
+            MODEL_SIZE,
+            device=WHISPER_DEVICE,
+            compute_type=WHISPER_COMPUTE,
+            cpu_threads=CPU_THREADS,
+            num_workers=1,
+        )
+    except Exception as exc:
+        model_error = str(exc)
+        model_loading = False
+        _log(f"MODEL_INIT_ERROR {model_error}")
+        raise
+    elapsed = time.monotonic() - start
+    with model_lock:
+        whisper_model = model
+        model_ready = True
+        model_loading = False
+    _log(f"MODEL_INIT_DONE elapsed={elapsed:.2f}s")
+    _log_slow("MODEL_INIT", start)
+    return model
 
 
 def _cookiefile_path(task_id: str) -> Path:
@@ -253,6 +362,8 @@ def _db_connect() -> sqlite3.Connection:
 
 
 def _init_db() -> None:
+    start = time.monotonic()
+    _log("DB_INIT_START")
     with db_lock, _db_connect() as conn:
         conn.execute("PRAGMA journal_mode=WAL")
         conn.execute(
@@ -279,6 +390,7 @@ def _init_db() -> None:
             """
         )
         conn.commit()
+    _log(f"DB_INIT_DONE elapsed={time.monotonic() - start:.2f}s")
 
 
 def _db_upsert_task(task: Dict[str, Any]) -> None:
@@ -343,6 +455,7 @@ def _db_load_tasks() -> List[sqlite3.Row]:
 def _load_tasks_from_db() -> None:
     global queue_sequence
     rows = _db_load_tasks()
+    _log(f"DB_LOAD count={len(rows)}")
     if not rows:
         return
     now = time.time()
@@ -530,7 +643,10 @@ def _download_audio(task_id: str, url: str, cookiefile: Optional[str]) -> Path:
 
 
 def _transcribe_audio(task_id: str, audio_path: Path) -> str:
-    segments, info = whisper_model.transcribe(str(audio_path), language="zh")
+    if not model_ready:
+        _log(f"MODEL_LOAD_PENDING task={task_id}")
+    model = _get_whisper_model()
+    segments, info = model.transcribe(str(audio_path), language="zh")
     total_duration = getattr(info, "duration", None) or 0
     parts = []
     for segment in segments:
@@ -561,14 +677,18 @@ def _process_task(task_id: str) -> None:
     )
 
     try:
+        download_start = time.monotonic()
         audio_path = _download_audio(task_id, task["url"], task.get("cookiefilePath"))
+        _log_slow("DOWNLOAD", download_start, f"task={task_id}")
         _update_task(task_id, audioPath=str(audio_path))
 
         if _is_cancelled(task_id):
             raise TaskCancelled("download canceled")
 
         _update_task(task_id, status=TASK_STATUS_TRANSCRIBING, transcribeProgress=0)
+        transcribe_start = time.monotonic()
         text = _transcribe_audio(task_id, audio_path)
+        _log_slow("TRANSCRIBE", transcribe_start, f"task={task_id}")
 
         if _is_cancelled(task_id):
             raise TaskCancelled("transcribe canceled")
@@ -638,8 +758,10 @@ _init_db()
 _load_tasks_from_db()
 worker = threading.Thread(target=_worker_loop, daemon=True)
 worker.start()
+_log("WORKER_READY")
 idle_monitor = threading.Thread(target=_idle_monitor_loop, daemon=True)
 idle_monitor.start()
+_log("IDLE_MONITOR_READY")
 
 
 @app.get("/api/tasks")
