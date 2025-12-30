@@ -64,11 +64,20 @@ function checkHealth() {
 }
 
 async function waitForHealth(retries = 120, delayMs = 500) {
+  const start = Date.now();
   for (let i = 0; i < retries; i += 1) {
     const ok = await checkHealth();
-    if (ok) return true;
+    if (ok) {
+      log(
+        `[host] health_ready elapsed=${Date.now() - start}ms attempts=${i + 1}`
+      );
+      return true;
+    }
     await wait(delayMs);
   }
+  log(
+    `[host] health_timeout elapsed=${Date.now() - start}ms attempts=${retries}`
+  );
   return false;
 }
 
@@ -111,7 +120,7 @@ function startService(token) {
     currentTokenPath = tokenPath;
   }
   log(
-    `[host] startService mode=${mode} command=${command} port=${SERVICE_PORT}`
+    `[host] startService mode=${mode} command=${command} port=${SERVICE_PORT} tokenPath=${currentTokenPath}`
   );
   childProcess = spawn(command, args, {
     env,
@@ -126,8 +135,10 @@ async function ensureRunning() {
   log('[host] ensureRunning');
   const running = await checkHealth();
   if (running) {
+    log('[host] health_ok already running');
     const token = await waitForToken();
     if (!token) {
+      log('[host] token_missing');
       return { ok: false, error: 'token_missing' };
     }
     return { ok: true, status: 'running', port: SERVICE_PORT, token };
@@ -139,14 +150,8 @@ async function ensureRunning() {
   }
 
   startService(token);
-  const ready = await waitForHealth();
-  if (!ready) {
-    log('[host] service_start_failed (health not ready)');
-    return { ok: false, error: 'service_start_failed' };
-  }
-
-  const confirmedToken = (await waitForToken()) || token;
-  return { ok: true, status: 'started', port: SERVICE_PORT, token: confirmedToken };
+  log('[host] service_starting (health pending)');
+  return { ok: true, status: 'starting', port: SERVICE_PORT, token };
 }
 
 function getStatus() {
