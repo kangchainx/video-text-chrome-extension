@@ -64,10 +64,15 @@ interface TourStep {
 }
 
 const App: React.FC = () => {
-  const [serviceStatus, setServiceStatus] = useState<'idle' | 'connecting' | 'ready' | 'error'>('idle')
+  const [serviceStatus, setServiceStatus] = useState<'idle' | 'connecting' | 'starting' | 'ready' | 'error'>('idle')
   const [serviceError, setServiceError] = useState<string | null>(null)
   const [servicePort, setServicePort] = useState<number | null>(null)
   const [serviceToken, setServiceToken] = useState<string | null>(null)
+  const [modelCached, setModelCached] = useState<boolean | null>(null)
+  const [modelReady, setModelReady] = useState<boolean | null>(null)
+  const [modelLoading, setModelLoading] = useState<boolean | null>(null)
+  const [overlayVisible, setOverlayVisible] = useState(true)
+  const [overlayHiding, setOverlayHiding] = useState(false)
   const [tasks, setTasks] = useState<TaskItem[]>([])
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null)
   const [isAdding, setIsAdding] = useState(false)
@@ -106,6 +111,11 @@ const App: React.FC = () => {
 
   const sseRef = useRef<EventSource | null>(null)
   const reconnectTimerRef = useRef<number | null>(null)
+  const statusPollRef = useRef<number | null>(null)
+  const overlayTimerRef = useRef<number | null>(null)
+  const overlayStartRef = useRef<number>(Date.now())
+  const overlayLockedRef = useRef(true)
+  const healthPollRef = useRef<number | null>(null)
   const progressRef = useRef(0)
   const toastTimersRef = useRef<Map<string, number[]>>(new Map())
   const ensureInFlightRef = useRef<Promise<{ port: number; token: string }> | null>(null)
@@ -269,11 +279,40 @@ const App: React.FC = () => {
         timers.forEach((timer) => window.clearTimeout(timer))
       )
       toastTimersRef.current.clear()
+      if (overlayTimerRef.current) {
+        window.clearTimeout(overlayTimerRef.current)
+      }
+      if (statusPollRef.current) {
+        window.clearInterval(statusPollRef.current)
+      }
+      if (healthPollRef.current) {
+        window.clearInterval(healthPollRef.current)
+      }
     }
   }, [])
 
+  useEffect(() => {
+    overlayStartRef.current = Date.now()
+    overlayLockedRef.current = true
+    setOverlayVisible(true)
+    setOverlayHiding(false)
+  }, [])
+
+  useEffect(() => {
+    if (tourMode !== 'auto') return
+    overlayLockedRef.current = false
+    setOverlayVisible(false)
+    setOverlayHiding(false)
+  }, [tourMode])
+
+  useEffect(() => {
+    if (serviceStatus === 'starting') {
+      setModelLoading(true)
+    }
+  }, [serviceStatus])
+
   const connectNative = () => {
-    return new Promise<{ port: number; token: string }>((resolve, reject) => {
+    return new Promise<{ port: number; token: string; status?: string }>((resolve, reject) => {
       chrome.runtime.sendNativeMessage(
         NATIVE_HOST_NAME,
         { type: 'ensureRunning' },
@@ -286,7 +325,7 @@ const App: React.FC = () => {
             reject(new Error(response?.error || '无法连接本地服务'))
             return
           }
-          resolve({ port: response.port, token: response.token })
+          resolve({ port: response.port, token: response.token, status: response.status })
         }
       )
     })
@@ -340,6 +379,43 @@ const App: React.FC = () => {
     }
   }
 
+  const fetchServiceStatus = async () => {
+    try {
+      const response = await apiFetch('/api/status')
+      const data = (await response.json()) as {
+        modelCached?: boolean
+        modelReady?: boolean
+        modelLoading?: boolean
+      }
+      setModelCached(Boolean(data.modelCached))
+      setModelReady(Boolean(data.modelReady))
+      setModelLoading(Boolean(data.modelLoading))
+      return data
+    } catch (error) {
+      console.error(error)
+      setModelCached(false)
+      setModelReady(false)
+      setModelLoading(true)
+      return null
+    }
+  }
+
+  const waitForHealth = async (port: number, timeoutMs = 60000) => {
+    const start = Date.now()
+    while (Date.now() - start < timeoutMs) {
+      try {
+        const response = await fetch(`http://127.0.0.1:${port}/health`)
+        if (response.ok) {
+          return true
+        }
+      } catch (error) {
+        // ignore
+      }
+      await new Promise((resolve) => window.setTimeout(resolve, 1000))
+    }
+    return false
+  }
+
   const startSse = () => {
     if (!apiBase || !serviceToken) return
     if (sseRef.current) {
@@ -372,12 +448,25 @@ const App: React.FC = () => {
     }
   }
 
-  const ensureService = async () => {
+  const ensureService = async (waitForReady = false) => {
     if (tourMode === 'auto') {
       throw new Error('tour_active')
     }
     if (ensureInFlightRef.current) {
       return ensureInFlightRef.current
+    }
+    if (serviceStatus === 'starting' && servicePort && serviceToken) {
+      if (!waitForReady) {
+        return { port: servicePort, token: serviceToken, status: 'starting' }
+      }
+      const healthy = await waitForHealth(servicePort)
+      if (!healthy) {
+        setServiceStatus('error')
+        setServiceError('service_start_failed')
+        throw new Error('service_start_failed')
+      }
+      setServiceStatus('ready')
+      return { port: servicePort, token: serviceToken, status: 'running' }
     }
     setAutoConnectEnabled(true)
     setServiceStatus('connecting')
@@ -387,6 +476,20 @@ const App: React.FC = () => {
         const result = await connectNative()
         setServicePort(result.port)
         setServiceToken(result.token)
+        if (result.status === 'running') {
+          setServiceStatus('ready')
+          return result
+        }
+        setServiceStatus('starting')
+        if (!waitForReady) {
+          return result
+        }
+        const healthy = await waitForHealth(result.port)
+        if (!healthy) {
+          setServiceStatus('error')
+          setServiceError('service_start_failed')
+          throw new Error('service_start_failed')
+        }
         setServiceStatus('ready')
         return result
       } catch (error: any) {
@@ -405,7 +508,7 @@ const App: React.FC = () => {
     if (tourMode === 'auto') return
     if (!autoConnectEnabled) return
     if (serviceStatus !== 'idle') return
-    ensureService().catch(() => undefined)
+    ensureService(false).catch(() => undefined)
     return () => {
       if (sseRef.current) {
         sseRef.current.close()
@@ -417,6 +520,7 @@ const App: React.FC = () => {
   }, [tourMode, serviceStatus, autoConnectEnabled])
 
   useEffect(() => {
+    if (serviceStatus !== 'ready') return
     if (!apiBase || !serviceToken || tourMode === 'auto') return
     refreshTasks()
     startSse()
@@ -425,7 +529,97 @@ const App: React.FC = () => {
         sseRef.current.close()
       }
     }
-  }, [apiBase, serviceToken, tourMode])
+  }, [apiBase, serviceToken, tourMode, serviceStatus])
+
+  useEffect(() => {
+    if (statusPollRef.current) {
+      window.clearInterval(statusPollRef.current)
+      statusPollRef.current = null
+    }
+    if ((serviceStatus !== 'ready' && serviceStatus !== 'starting') || !apiBase || !serviceToken || tourMode === 'auto') {
+      setModelCached(null)
+      setModelReady(null)
+      setModelLoading(null)
+      return
+    }
+    const poll = async () => {
+      const data = await fetchServiceStatus()
+      if (data?.modelReady) {
+        if (statusPollRef.current) {
+          window.clearInterval(statusPollRef.current)
+          statusPollRef.current = null
+        }
+      }
+    }
+    const shouldPoll = serviceStatus === 'starting' || modelLoading === true
+    if (!shouldPoll) {
+      if (modelCached === null) {
+        poll()
+      }
+      return
+    }
+    poll()
+    statusPollRef.current = window.setInterval(poll, 10000)
+    return () => {
+      if (statusPollRef.current) {
+        window.clearInterval(statusPollRef.current)
+        statusPollRef.current = null
+      }
+    }
+  }, [serviceStatus, apiBase, serviceToken, tourMode, modelLoading, modelCached])
+
+  useEffect(() => {
+    if (healthPollRef.current) {
+      window.clearInterval(healthPollRef.current)
+      healthPollRef.current = null
+    }
+    if (serviceStatus !== 'starting' || !servicePort || tourMode === 'auto') {
+      return
+    }
+    const start = Date.now()
+    healthPollRef.current = window.setInterval(async () => {
+      try {
+        const response = await fetch(`http://127.0.0.1:${servicePort}/health`)
+        if (response.ok) {
+          window.clearInterval(healthPollRef.current!)
+          healthPollRef.current = null
+          setServiceStatus('ready')
+          return
+        }
+      } catch {
+        // ignore
+      }
+      if (Date.now() - start > 60000) {
+        window.clearInterval(healthPollRef.current!)
+        healthPollRef.current = null
+        setServiceStatus('error')
+        setServiceError('service_start_failed')
+      }
+    }, 1000)
+    return () => {
+      if (healthPollRef.current) {
+        window.clearInterval(healthPollRef.current)
+        healthPollRef.current = null
+      }
+    }
+  }, [serviceStatus, servicePort, tourMode])
+
+  useEffect(() => {
+    if (!overlayLockedRef.current) return
+    if (serviceStatus === 'error') {
+      hideOverlay(0)
+      return
+    }
+    if (serviceStatus !== 'ready' && serviceStatus !== 'starting') {
+      setOverlayVisible(true)
+      setOverlayHiding(false)
+      return
+    }
+    if (modelCached === null) return
+    const elapsed = Date.now() - overlayStartRef.current
+    const delayMs = modelCached ? 0 : Math.max(0, 10000 - elapsed)
+    hideOverlay(delayMs)
+  }, [serviceStatus, modelCached])
 
   useEffect(() => {
     const inProgress = tasks.filter((task) =>
@@ -501,6 +695,25 @@ const App: React.FC = () => {
     toastTimersRef.current.set(id, [exitTimer])
   }
 
+  const hideOverlay = (delayMs = 0) => {
+    if (overlayTimerRef.current) {
+      window.clearTimeout(overlayTimerRef.current)
+      overlayTimerRef.current = null
+    }
+    const run = () => {
+      setOverlayHiding(true)
+      window.setTimeout(() => {
+        setOverlayVisible(false)
+        overlayLockedRef.current = false
+      }, 500)
+    }
+    if (delayMs <= 0) {
+      run()
+      return
+    }
+    overlayTimerRef.current = window.setTimeout(run, delayMs)
+  }
+
   const guardTourAction = (message = '请先完成新手引导') => {
     if (tourMode !== 'auto') return false
     showToast('info', message)
@@ -512,7 +725,10 @@ const App: React.FC = () => {
     setIsAdding(true)
     try {
       if (serviceStatus !== 'ready') {
-        await ensureService()
+        await ensureService(true)
+      }
+      if (modelReady === false) {
+        setModelLoading(true)
       }
       const tab = await getActiveTab()
       const url = tab.url || ''
@@ -605,7 +821,7 @@ const App: React.FC = () => {
     if (guardTourAction()) return
     try {
       setAutoConnectEnabled(true)
-      await ensureService()
+      await ensureService(true)
     } catch (error: any) {
       if (error?.message === 'tour_active') return
       showToast('error', error?.message || '连接失败')
@@ -642,7 +858,7 @@ const App: React.FC = () => {
     setTourMode(null)
     setTourStep(0)
     if (wasAuto) {
-      ensureService().catch(() => undefined)
+      ensureService(false).catch(() => undefined)
     }
   }
 
@@ -835,31 +1051,43 @@ const App: React.FC = () => {
           >
             新手引导
           </button>
-          {serviceStatus === 'ready' && (
-            <button
-              onClick={handleStopService}
-              className="inline-flex items-center gap-1 rounded-full border border-rose-100 px-3 py-1 text-[10px] font-bold text-rose-500 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-sm hover:text-rose-600"
-            >
-              <Power size={12} />
-              停止服务
-            </button>
-          )}
-          <div
+          <button
             ref={serviceBadgeRef}
-            className={`px-3 py-1.5 rounded-2xl text-[10px] font-black tracking-wider shadow-sm border ${
+            onClick={
               serviceStatus === 'ready'
-                ? 'bg-white text-emerald-600 border-emerald-100'
-                : serviceStatus === 'connecting'
+                ? handleStopService
+                : serviceStatus === 'error'
+                  ? handleReconnect
+                  : undefined
+            }
+            disabled={serviceStatus === 'connecting' || serviceStatus === 'starting'}
+            className={`inline-flex items-center gap-1 rounded-2xl px-3 py-1.5 text-[10px] font-black tracking-wider shadow-sm border transition-all duration-200 ${
+              serviceStatus === 'ready'
+                ? 'bg-white text-emerald-600 border-emerald-100 hover:-translate-y-0.5 hover:shadow-sm'
+                : serviceStatus === 'connecting' || serviceStatus === 'starting'
                   ? 'bg-white text-indigo-500 border-indigo-100'
-                  : 'bg-white text-rose-500 border-rose-100'
+                  : 'bg-white text-rose-500 border-rose-100 hover:-translate-y-0.5 hover:shadow-sm'
             }`}
           >
-            {serviceStatus === 'ready' ? '服务已连接' : serviceStatus === 'connecting' ? '连接中' : '服务未连接'}
-          </div>
+            {serviceStatus === 'ready' && <Power size={12} />}
+            {serviceStatus === 'ready'
+              ? '服务已连接 · 停止'
+              : serviceStatus === 'starting'
+                ? '启动中'
+                : serviceStatus === 'connecting'
+                  ? '连接中'
+                  : '服务未连接 · 重试'}
+          </button>
         </div>
       </header>
 
       <main ref={mainRef} className="flex-1 overflow-y-auto px-6 py-6 relative z-10">
+        {(serviceStatus === 'ready' || serviceStatus === 'starting') && modelLoading && (
+          <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-indigo-100 bg-white/80 px-4 py-2 text-xs font-semibold text-indigo-600 shadow-sm">
+            <ArrowClockwise size={12} className="animate-spin" />
+            模型加载中
+          </div>
+        )}
         {(serviceStatus === 'error' || diagnosticStage !== 'idle') && (
           <div className="mb-6 rounded-[24px] bg-slate-50 p-5 shadow-sm list-entry">
             {diagnosticStage === 'idle' && (
@@ -1220,6 +1448,13 @@ const App: React.FC = () => {
           </button>
         )}
       </main>
+
+      {overlayVisible && (
+        <div className={`loading-overlay ${overlayHiding ? 'loading-overlay-exit' : ''}`}>
+          <div className="loading-blob" />
+          <div className="loading-text">启动中</div>
+        </div>
+      )}
 
       {tourMode && activeTour && (
         <div className="tour-layer">

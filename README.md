@@ -1,5 +1,7 @@
 # video-text-chrome-extension
 
+English | [中文](README.zh-CN.md)
+
 This project is a Chrome Side Panel transcription tool. The extension only manages the task panel and downloads. All downloading and transcription happen in a local Python service (yt-dlp + faster-whisper). Tasks run in a serial queue.
 
 ## Architecture
@@ -166,6 +168,7 @@ Load `dist` in `chrome://extensions`, then click “Reload”.
 ## HTTP API
 
 - `GET /api/tasks`: list tasks
+- `GET /api/status`: service + model status
 - `GET /api/tasks/stream`: SSE updates
 - `GET /api/tasks/{id}/result`: download txt
 

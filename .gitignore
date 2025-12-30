@@ -8,3 +8,4 @@ dist
 temp
 native-host/VideoTextHost.pkg
 native-host/macos-pkg/build
+.vscode
