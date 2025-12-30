@@ -79,6 +79,83 @@ body {
   will-change: transform, opacity, filter;
 }
 
+@keyframes loadingMorph {
+  0% {
+    border-radius: 30% 70% 70% 30%;
+  }
+  50% {
+    border-radius: 80% 20% 50% 50%;
+  }
+  100% {
+    border-radius: 30% 70% 70% 30%;
+  }
+}
+
+@keyframes loadingSpin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes loadingDots {
+  0% {
+    content: '.';
+  }
+  33% {
+    content: '..';
+  }
+  66% {
+    content: '...';
+  }
+  100% {
+    content: '.';
+  }
+}
+
+.loading-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(8px);
+  pointer-events: auto;
+  transition: opacity 0.5s ease, filter 0.5s ease;
+}
+
+.loading-overlay-exit {
+  opacity: 0;
+  filter: blur(0);
+  pointer-events: none;
+}
+
+.loading-blob {
+  width: 72px;
+  height: 72px;
+  background: #6366f1;
+  animation: loadingMorph 4s ease-in-out infinite, loadingSpin 8s linear infinite;
+  box-shadow: 0 20px 40px -20px rgb(99 102 241 / 0.5);
+}
+
+.loading-text {
+  font-size: 12px;
+  letter-spacing: 0.3em;
+  color: #475569;
+  font-weight: 600;
+}
+
+.loading-text::after {
+  content: '.';
+  animation: loadingDots 1.2s steps(1, end) infinite;
+}
+
 @keyframes toastIn {
   0% {
     transform: translateX(120%);
