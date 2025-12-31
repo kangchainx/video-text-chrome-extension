@@ -1,207 +1,102 @@
-# video-text-chrome-extension
+# Video Text Chrome Extension
 
-English | [中文](README.zh-CN.md)
+**[中文](README.zh-CN.md)**
 
-This project is a Chrome Side Panel transcription tool. The extension only manages the task panel and downloads. All downloading and transcription happen in a local Python service (yt-dlp + faster-whisper). Tasks run in a serial queue.
+> **Your Private, Unlimited, Local Transcription Studio.**
+>
+> An advanced Chrome Side Panel tool that turns videos into text using local AI power. Secure, free, and unlimited.
 
-## Architecture
+![License](https://img.shields.io/badge/license-ISC-blue.svg)
 
-- **Extension**: create tasks, show progress, download txt, manage queue
-- **Local Python service**: download audio, transcribe, generate txt, expose HTTP/SSE
-- **Native Host**: starts/ensures the local service and returns port + token
+## Why This Extension?
 
-## Local Python Service
+Unlike cloud-based services with time limits and privacy risks, this extension runs entirely on your machine.
 
-### 1) Create venv and install dependencies
+-   🔒 **Privacy First**: All data stays on your `localhost`. No audio is ever uploaded to the cloud.
+-   ♾️ **Unlimited**: No monthly limits, no file size limits. Transcribe 5-hour lectures or podcasts for free.
+-   🎬 **Login Support**: download & transcribe high-quality videos (1080p+) from sites like Bilibili by reusing your browser cookies.
+-   🚀 **Powerful Native Backend**: Uses a local Python service (FastAPI + yt-dlp + faster-whisper) to bypass browser limitations.
+
+---
+
+## Installation (For Users)
+
+### Option A: One-Click Installer (macOS)
+*(Recommended for most users)*
+
+1.  **Install the Chrome Extension**: Load the `dist` folder in `chrome://extensions` (Developer Mode).
+2.  **Install the Local Service**:
+    Download the installer and run it. This will set up the necessary Python environment and Native Messaging host for you.
+    ```bash
+    # (Example command if you built the pkg)
+    installer -pkg native-host/VideoTextHost.pkg -target CurrentUserHomeDirectory
+    ```
+    > *Note: Release binaries coming soon.*
+
+### Option B: Manual Setup (For Developers)
+
+If you prefer to run the Python service from source or are developing the extension.
+
+#### 1. Extension Setup
 ```bash
-python -m venv .venv
-source .venv/bin/activate   # macOS/Linux
-# Windows: .venv\Scripts\activate
-
-pip install -r requirements-mini.txt
+npm install
+npm run dev
+# Load 'dist' directory in chrome://extensions
 ```
 
-### 2) Run service (debug)
+#### 2. Local Service Setup
+
+**Pre-requisites**: Python 3.10+, Node.js (for YouTube verification)
+
+```bash
+# 1. Create virtual environment
+python -m venv .venv
+source .venv/bin/activate
+
+# 2. Install dependencies
+pip install -r requirements-mini.txt
+
+# 3. Setup Native Host (macOS)
+chmod +x native-host/install-macos.sh
+./native-host/install-macos.sh <YOUR_EXTENSION_ID>
+# You can find the ID in chrome://extensions
+```
+
+#### 3. Run Service
+For development, you can run the service manually to see logs:
 ```bash
 python mini_transcriber.py
 ```
-The service listens on `http://127.0.0.1:8001`. The token is written to `temp/service.token` (relative to the service script directory).
+*Port*: `8001` (Default)
 
-### 2.1) Chinese output normalization
-Chinese transcripts are normalized to **Simplified Chinese** using OpenCC (`opencc-python-reimplemented`).
-
-### 3) Extra dependency (YouTube n challenge)
-Install Node.js so yt-dlp can use the EJS runtime. Restart the service after installing Node.
-
-### Optional environment variables
-- `WHISPER_MODEL`: tiny/base/small/medium/large/large-v2/large-v3
-- `WHISPER_DEVICE`: cpu / cuda
-- `WHISPER_COMPUTE`: int8 / float16 / float32
-- `TRANSCRIBER_PORT`: service port (default 8001)
-- `TRANSCRIBER_TOKEN`: fixed token (auto-generated if not set)
-- `TRANSCRIBER_TOKEN_PATH`: token file path (default: `temp/service.token`)
-- `TRANSCRIBER_DB_PATH`: SQLite db path (default: `temp/tasks.db`)
-
-### Persistence (SQLite)
-Tasks are persisted to SQLite at `temp/tasks.db`. On service restart:
-- queued tasks are restored
-- tasks that were in progress are marked as `error` with an "interrupted" message
-
-## Native Host (macOS)
-
-### Option A: .pkg installer (recommended for distribution)
-
-This option bundles the Python service into a standalone executable (PyInstaller onedir), so **end users do not need Python installed**.
-
-Build the package (developer-only step, requires Python + PyInstaller):
-```bash
-python3 -m pip install -r requirements-mini.txt pyinstaller
-chmod +x native-host/build-macos-pkg.sh
-./native-host/build-macos-pkg.sh <EXTENSION_ID> 1.0.0
-```
-
-Install to the **current user** (no admin required):
-```bash
-installer -pkg native-host/VideoTextHost.pkg -target CurrentUserHomeDirectory
-```
-
-Test the bundled service binary (optional):
-```bash
-"$HOME/Library/Application Support/VideoTextHost/video-text-transcriber/video-text-transcriber"
-```
-
-Installed files:
-- Host directory: `~/Library/Application Support/VideoTextHost/`
-- Native Host manifest: `~/Library/Application Support/Google/Chrome/NativeMessagingHosts/com.video_text.transcriber.json`
-
-Bundled service binary:
-- `~/Library/Application Support/VideoTextHost/video-text-transcriber`
-
-> If you double-click the `.pkg`, macOS may install to the system root and require admin privileges.  
-> Use the command above to keep everything inside the user directory.
-
-Uninstall (macOS):
-```bash
-chmod +x native-host/uninstall-macos.sh
-./native-host/uninstall-macos.sh
-```
-
-### Option B: manual setup
-
-1) Install Node.js
-2) Keep these files in the **same folder** (recommended)
-   - Example: `~/video-text-host/`
-   - Required files:
-     - `host-macos.sh`
-     - `host.cjs`
-     - `mini_transcriber.py`
-3) Make them executable:
-```bash
-chmod +x ~/video-text-host/host.cjs
-chmod +x ~/video-text-host/host-macos.sh
-```
-4) Install host manifest (recommended):
-```bash
-chmod +x native-host/install-macos.sh
-./native-host/install-macos.sh <EXTENSION_ID>
-```
-5) Or manually copy manifest:
-```bash
-mkdir -p ~/Library/Application\ Support/Google/Chrome/NativeMessagingHosts
-cp native-host/com.video_text.transcriber.json \
-  ~/Library/Application\ Support/Google/Chrome/NativeMessagingHosts/
-```
-6) Edit `com.video_text.transcriber.json`
-- Set `path` to your local `~/video-text-host/host-macos.sh`
-- Set `allowed_origins` to your extension ID (`chrome-extension://<ID>/`)
-
-> Extension ID is visible on `chrome://extensions`.
-
-### Native Host environment variables
-- `PYTHON_BIN`: path to Python binary
-- `TRANSCRIBER_SCRIPT`: absolute path to `mini_transcriber.py` (only if not colocated)
-- `TRANSCRIBER_BIN`: path to bundled `video-text-transcriber` (preferred if present)
-- `TRANSCRIBER_BASE_DIR`: base directory for temp/db/token files (when using the binary)
-- `TRANSCRIBER_PORT`: service port
-- `TRANSCRIBER_TOKEN_PATH`: token file path
-- `NATIVE_HOST_LOG_PATH`: host log file path
-- `TRANSCRIBER_CPU_THREADS`: CPU thread cap for transcription (default: `2`)
-- `TRANSCRIBER_IDLE_SECONDS`: auto-exit when idle (default: `600`)
-- `TRANSCRIBER_SERVICE_LOG`: service log file path (default: `temp/service.log`)
-
-### Performance defaults
-- Default model size is `tiny` to keep CPU/memory usage low on typical laptops.
-- Transcription runs with a single worker and a low thread cap by default.
-- The service auto-exits after 10 minutes of idle time to avoid running in the background.
-
-### Logs and token location (recommended layout)
-If you use `~/video-text-host/` as the host directory, logs and token are stored under:
-```
-~/video-text-host/temp/
-  service.token
-  service.log
-  native-host.log
-  native-host-wrapper.log
-  tasks.db
-```
-
-## Extension Dev
-
-```bash
-npm run dev
-```
-Load `dist` in `chrome://extensions`, then click “Reload”.
+---
 
 ## Usage
 
-1) Open a YouTube/Bilibili video page
-2) Click the extension icon to open the side panel
-3) Click **Create transcription task**
-4) Track download/transcription progress
-5) Click **Download TXT** when done
+1.  **Open Video**: Navigate to a YouTube or Bilibili video.
+2.  **Open Panel**: Click the extension icon to open the Side Panel.
+3.  **Transcribe**: Click **"Create Task"**.
+4.  **Wait & Download**: The task runs in the background. Once done, click **"Download TXT"**.
 
-## Cookies (B2)
+---
 
-- The service first tries `cookies-from-browser`
-- If download fails due to cookies, the extension automatically reads site cookies and retries
+## Architecture
 
-## HTTP API
+This project uses a hybrid architecture to combine the convenience of a browser extension with the power of native code.
 
-- `GET /api/tasks`: list tasks
-- `GET /api/status`: service + model status
-- `GET /api/tasks/stream`: SSE updates
-- `GET /api/tasks/{id}/result`: download txt
-
-All endpoints require token (`Authorization: Bearer <token>` or `?token=<token>`).
+-   **Frontend**: React 19 + TypeScript + Vite (Chrome Side Panel)
+-   **Backend**: Python (FastAPI) + SQLite
+-   **Core Engines**:
+    -   `yt-dlp`: For robust video/audio downloading.
+    -   `faster-whisper`: For high-performance local AI transcription.
+-   **Bridge**: Chrome Native Messaging (connects extension to local Python process).
 
 ## Troubleshooting
 
-### 1) Native Host cannot connect
-In the extension Service Worker console:
-```js
-chrome.runtime.sendNativeMessage('com.video_text.transcriber', { type: 'getStatus' }, console.log)
-```
-Check:
-- `Native host has exited` usually means the manifest `path` is wrong or the host script is not executable.
-- Verify manifest:
-  ```bash
-  cat ~/Library/Application\ Support/Google/Chrome/NativeMessagingHosts/com.video_text.transcriber.json
-  ```
-  Ensure `path` points to `~/video-text-host/host-macos.sh`.
-- Reinstall manifest:
-  ```bash
-  chmod +x native-host/install-macos.sh
-  ./native-host/install-macos.sh <EXTENSION_ID>
-  ```
-- Logs:
-  - `temp/native-host-wrapper.log` (node/python discovery)
-  - `temp/native-host.log` (host events)
+-   **"Native host has exited"**: Check if `host-macos.sh` is executable and the path in `manifest.json` is correct.
+-   **Permission Denied**: Run `chmod +x` on all scripts in `native-host/`.
+-   **Download Error**: Integrating cookies for Bilibili 1080p requires the extension to read cookies for `.bilibili.com`.
 
-### 2) Check service health
-```bash
-curl http://127.0.0.1:8001/health
-```
-Expected response: `{ "status": "ok" }`
+## Contributing
 
-### 3) Token mismatch
-Compare `temp/service.token` with the token shown in the extension. Remove the token file and restart the service if needed.
+Pull requests are welcome! Please make sure to update tests as appropriate.
