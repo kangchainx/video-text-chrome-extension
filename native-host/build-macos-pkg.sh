@@ -19,14 +19,25 @@ SCRIPTS_DIR="${BUILD_DIR}/scripts"
 rm -rf "${BUILD_DIR}"
 mkdir -p "${PAYLOAD_DIR}" "${SCRIPTS_DIR}"
 
-PYTHON_BIN="${PYTHON_BIN:-python3}"
-if ! command -v "${PYTHON_BIN}" >/dev/null 2>&1; then
+PYTHON_BIN="${PYTHON_BIN:-}"
+if [ -z "$PYTHON_BIN" ]; then
+  # 优先使用项目虚拟环境的 Python
+  if [ -x "${REPO_ROOT}/.venv/bin/python3" ]; then
+    PYTHON_BIN="${REPO_ROOT}/.venv/bin/python3"
+  elif [ -x "/opt/homebrew/opt/python@3.11/bin/python3.11" ]; then
+    PYTHON_BIN="/opt/homebrew/opt/python@3.11/bin/python3.11"
+  else
+    PYTHON_BIN="python3"
+  fi
+fi
+
+if ! command -v "$PYTHON_BIN" >/dev/null 2>&1; then
   echo "python3 not found. Install Python to build the package."
   exit 1
 fi
 
-if ! "${PYTHON_BIN}" -m PyInstaller --version >/dev/null 2>&1; then
-  echo "PyInstaller not found. Install it with: ${PYTHON_BIN} -m pip install pyinstaller"
+if ! "$PYTHON_BIN" -m PyInstaller --version >/dev/null 2>&1; then
+  echo "PyInstaller not found. Install it with: $PYTHON_BIN -m pip install pyinstaller"
   exit 1
 fi
 
