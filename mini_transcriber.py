@@ -117,6 +117,7 @@ def _detect_model_cache() -> Optional[Path]:
         home / ".cache" / "whisper" / f"{MODEL_SIZE}-ct2",
         home / ".cache" / "faster-whisper" / MODEL_SIZE,
         home / ".cache" / "faster-whisper" / f"{MODEL_SIZE}-ct2",
+        home / ".cache" / "huggingface" / "hub" / f"models--Systran--faster-whisper-{MODEL_SIZE}",
     ]
     for candidate in candidates:
         if candidate.exists():
