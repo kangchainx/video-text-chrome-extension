@@ -1,17 +1,39 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import ConfirmModal from './ConfirmModal'
 import {
   ArrowClockwise,
   CheckCircle,
-  Clock,
+  CloudArrowDown,
+  Copy,
+  Download,
   DownloadSimple,
+  FileText,
+  Clock,
+  Globe,
+  Lightbulb,
+  MagnifyingGlass,
+  PauseCircle,
+  PlayCircle,
   Plus,
   Power,
+  Sparkle,
   Trash,
   WarningCircle,
   X,
+  XCircle,
 } from 'phosphor-react'
 
 const NATIVE_HOST_NAME = 'com.video_text.transcriber'
+
+// 错误码到 i18n 键的映射
+const SERVICE_ERROR_KEYS: Record<string, string> = {
+  service_start_failed: 'errors.serviceStartFailed',
+  native_error: 'errors.nativeError',
+  native_host_timeout: 'errors.nativeTimeout',
+  token_mismatch: 'errors.tokenMismatch',
+  connection_refused: 'errors.connectionRefused',
+}
 
 type TaskStatus = 'queued' | 'downloading' | 'transcribing' | 'done' | 'error' | 'canceled'
 
@@ -64,6 +86,19 @@ interface TourStep {
 }
 
 const App: React.FC = () => {
+  const { t, i18n } = useTranslation()
+
+  // 获取错误消息（使用 i18n）
+  const getServiceErrorMessage = (error: string | null): string => {
+    if (!error) return t('errors.checkNativeHost')
+    if (SERVICE_ERROR_KEYS[error]) {
+      return t(SERVICE_ERROR_KEYS[error])
+    }
+    // 对未知错误进行安全处理：截断并移除潜在的 HTML 标签
+    const sanitized = error.replace(/<[^>]*>/g, '').slice(0, 100)
+    return sanitized || t('errors.unknownError')
+  }
+
   const [serviceStatus, setServiceStatus] = useState<'idle' | 'connecting' | 'starting' | 'ready' | 'error'>('idle')
   const [serviceError, setServiceError] = useState<string | null>(null)
   const [servicePort, setServicePort] = useState<number | null>(null)
@@ -108,9 +143,18 @@ const App: React.FC = () => {
   const [tourBubblePos, setTourBubblePos] = useState({ top: 0, left: 0 })
   const [tourRect, setTourRect] = useState({ top: 0, left: 0, width: 0, height: 0 })
   const [autoConnectEnabled, setAutoConnectEnabled] = useState(true)
+  const [confirmModalConfig, setConfirmModalConfig] = useState<{
+    isOpen: boolean
+    title: string
+    message: string
+    description?: string
+    onConfirm: () => void
+    variant?: 'danger' | 'warning' | 'info'
+  }>({ isOpen: false, title: '', message: '', onConfirm: () => {} })
 
   const sseRef = useRef<EventSource | null>(null)
   const reconnectTimerRef = useRef<number | null>(null)
+  const sseRetryCountRef = useRef(0)
   const statusPollRef = useRef<number | null>(null)
   const overlayTimerRef = useRef<number | null>(null)
   const overlayStartRef = useRef<number>(Date.now())
@@ -120,7 +164,7 @@ const App: React.FC = () => {
   const toastTimersRef = useRef<Map<string, number[]>>(new Map())
   const ensureInFlightRef = useRef<Promise<{ port: number; token: string }> | null>(null)
   const mainRef = useRef<HTMLElement | null>(null)
-  const serviceBadgeRef = useRef<HTMLDivElement | null>(null)
+  const serviceBadgeRef = useRef<HTMLButtonElement | null>(null)
   const createButtonRef = useRef<HTMLButtonElement | null>(null)
   const listAreaRef = useRef<HTMLDivElement | null>(null)
   const clearQueueRef = useRef<HTMLButtonElement | null>(null)
@@ -132,16 +176,12 @@ const App: React.FC = () => {
 
   const tourSteps: TourStep[] = useMemo(
     () => [
-      { key: 'status', title: '服务连接', content: '等待本地服务连接成功。' },
-      { key: 'create', title: '创建任务', content: '浏览器打开你喜欢的视频，创建转写任务。' },
-      {
-        key: 'list',
-        title: '任务进度',
-        content: '在这里查看实时任务进度与已完成的任务并下载文件。',
-      },
-      { key: 'clear', title: '清空队列', content: '点击一键清空等待中的任务。' },
+      { key: 'status', title: t('tour.steps.status.title'), content: t('tour.steps.status.content') },
+      { key: 'create', title: t('tour.steps.create.title'), content: t('tour.steps.create.content') },
+      { key: 'list', title: t('tour.steps.list.title'), content: t('tour.steps.list.content') },
+      { key: 'clear', title: t('tour.steps.clear.title'), content: t('tour.steps.clear.content') },
     ],
-    []
+    [t]
   )
 
   const taskStats = useMemo(() => {
@@ -273,20 +313,43 @@ const App: React.FC = () => {
     }
   }, [tourMode, tourStep, tourSteps, filter])
 
+  // 统一清理所有计时器和连接
   useEffect(() => {
     return () => {
+      // 清理 toast 计时器
       toastTimersRef.current.forEach((timers) =>
         timers.forEach((timer) => window.clearTimeout(timer))
       )
       toastTimersRef.current.clear()
+
+      // 清理 overlay 计时器
       if (overlayTimerRef.current) {
         window.clearTimeout(overlayTimerRef.current)
+        overlayTimerRef.current = null
       }
+
+      // 清理状态轮询
       if (statusPollRef.current) {
         window.clearInterval(statusPollRef.current)
+        statusPollRef.current = null
       }
+
+      // 清理健康检查轮询
       if (healthPollRef.current) {
         window.clearInterval(healthPollRef.current)
+        healthPollRef.current = null
+      }
+
+      // 清理 SSE 重连计时器
+      if (reconnectTimerRef.current) {
+        window.clearTimeout(reconnectTimerRef.current)
+        reconnectTimerRef.current = null
+      }
+
+      // 关闭 SSE 连接
+      if (sseRef.current) {
+        sseRef.current.close()
+        sseRef.current = null
       }
     }
   }, [])
@@ -311,8 +374,19 @@ const App: React.FC = () => {
     }
   }, [serviceStatus])
 
+  const NATIVE_TIMEOUT_MS = 30000
+
+  const withTimeout = <T,>(promise: Promise<T>, timeoutMs: number, errorMessage: string): Promise<T> => {
+    return Promise.race([
+      promise,
+      new Promise<T>((_, reject) =>
+        window.setTimeout(() => reject(new Error(errorMessage)), timeoutMs)
+      ),
+    ])
+  }
+
   const connectNative = () => {
-    return new Promise<{ port: number; token: string; status?: string }>((resolve, reject) => {
+    const request = new Promise<{ port: number; token: string; status?: string }>((resolve, reject) => {
       chrome.runtime.sendNativeMessage(
         NATIVE_HOST_NAME,
         { type: 'ensureRunning' },
@@ -322,17 +396,18 @@ const App: React.FC = () => {
             return
           }
           if (!response?.ok) {
-            reject(new Error(response?.error || '无法连接本地服务'))
+            reject(new Error(response?.error || 'cannot_connect'))
             return
           }
           resolve({ port: response.port, token: response.token, status: response.status })
         }
       )
     })
+    return withTimeout(request, NATIVE_TIMEOUT_MS, 'native_host_timeout')
   }
 
   const sendNative = (type: 'getStatus' | 'ensureRunning' | 'shutdown') => {
-    return new Promise<any>((resolve, reject) => {
+    const request = new Promise<any>((resolve, reject) => {
       chrome.runtime.sendNativeMessage(NATIVE_HOST_NAME, { type }, (response) => {
         if (chrome.runtime.lastError) {
           reject(new Error(chrome.runtime.lastError.message))
@@ -345,26 +420,42 @@ const App: React.FC = () => {
         resolve(response)
       })
     })
+    return withTimeout(request, NATIVE_TIMEOUT_MS, 'service_timeout')
   }
+
+  const API_TIMEOUT_MS = 15000
 
   const apiFetch = async (path: string, options: RequestInit = {}) => {
     if (!apiBase || !serviceToken) {
-      throw new Error('本地服务未连接')
+      throw new Error('service_not_connected')
     }
-    const headers = new Headers(options.headers)
-    if (!headers.has('Content-Type')) {
-      headers.set('Content-Type', 'application/json')
+    const controller = new AbortController()
+    const timeoutId = window.setTimeout(() => controller.abort(), API_TIMEOUT_MS)
+
+    try {
+      const headers = new Headers(options.headers)
+      if (!headers.has('Content-Type')) {
+        headers.set('Content-Type', 'application/json')
+      }
+      headers.set('Authorization', `Bearer ${serviceToken}`)
+      const response = await fetch(`${apiBase}${path}`, {
+        ...options,
+        headers,
+        signal: controller.signal,
+      })
+      if (!response.ok) {
+        const detail = await response.text()
+        throw new Error(detail || 'request_failed')
+      }
+      return response
+    } catch (error: any) {
+      if (error.name === 'AbortError') {
+        throw new Error('request_timeout')
+      }
+      throw error
+    } finally {
+      window.clearTimeout(timeoutId)
     }
-    headers.set('Authorization', `Bearer ${serviceToken}`)
-    const response = await fetch(`${apiBase}${path}`, {
-      ...options,
-      headers,
-    })
-    if (!response.ok) {
-      const detail = await response.text()
-      throw new Error(detail || '请求失败')
-    }
-    return response
   }
 
   const refreshTasks = async () => {
@@ -374,8 +465,12 @@ const App: React.FC = () => {
       setTasks(data.tasks)
       setActiveTaskId(data.activeTaskId)
       setHasSnapshot(true)
-    } catch (error) {
+    } catch (error: any) {
       console.error(error)
+      // Only show toast for non-timeout errors to avoid duplicate notifications
+      if (error.message !== 'request_timeout') {
+        showToast('error', t('errors.refreshTasksFailed'))
+      }
     }
   }
 
@@ -393,28 +488,41 @@ const App: React.FC = () => {
       return data
     } catch (error) {
       console.error(error)
-      setModelCached(false)
-      setModelReady(false)
-      setModelLoading(true)
+      // 出错时设为 null 表示状态未知，而不是 false/true
+      setModelCached(null)
+      setModelReady(null)
+      setModelLoading(null)
       return null
     }
   }
 
+  const HEALTH_CHECK_TIMEOUT_MS = 5000
+
   const waitForHealth = async (port: number, timeoutMs = 60000) => {
     const start = Date.now()
     while (Date.now() - start < timeoutMs) {
+      const controller = new AbortController()
+      const timeoutId = window.setTimeout(() => controller.abort(), HEALTH_CHECK_TIMEOUT_MS)
+
       try {
-        const response = await fetch(`http://127.0.0.1:${port}/health`)
+        const response = await fetch(`http://127.0.0.1:${port}/health`, {
+          signal: controller.signal,
+        })
         if (response.ok) {
           return true
         }
       } catch (error) {
-        // ignore
+        // ignore - 服务可能还在启动中
+      } finally {
+        window.clearTimeout(timeoutId)
       }
       await new Promise((resolve) => window.setTimeout(resolve, 1000))
     }
     return false
   }
+
+  const SSE_MAX_RETRIES = 5
+  const SSE_BASE_DELAY = 1000
 
   const startSse = () => {
     if (!apiBase || !serviceToken) return
@@ -432,6 +540,7 @@ const App: React.FC = () => {
         setActiveTaskId(data.activeTaskId)
         setSseStatus('connected')
         setHasSnapshot(true)
+        sseRetryCountRef.current = 0 // 连接成功，重置重试计数
       } catch (error) {
         console.error(error)
       }
@@ -442,9 +551,19 @@ const App: React.FC = () => {
       if (reconnectTimerRef.current) {
         window.clearTimeout(reconnectTimerRef.current)
       }
+
+      sseRetryCountRef.current += 1
+
+      if (sseRetryCountRef.current > SSE_MAX_RETRIES) {
+        showToast('error', t('errors.sseReconnectFailed'))
+        return
+      }
+
+      // Exponential backoff: 1s, 2s, 4s, 8s, 16s
+      const delay = SSE_BASE_DELAY * Math.pow(2, sseRetryCountRef.current - 1)
       reconnectTimerRef.current = window.setTimeout(() => {
         startSse()
-      }, 1200)
+      }, delay)
     }
   }
 
@@ -494,7 +613,7 @@ const App: React.FC = () => {
         return result
       } catch (error: any) {
         setServiceStatus('error')
-        setServiceError(error.message || '本地服务不可用')
+        setServiceError(error.message || 'service_unavailable')
         throw error
       } finally {
         ensureInFlightRef.current = null
@@ -522,6 +641,7 @@ const App: React.FC = () => {
   useEffect(() => {
     if (serviceStatus !== 'ready') return
     if (!apiBase || !serviceToken || tourMode === 'auto') return
+    sseRetryCountRef.current = 0 // 新连接时重置重试计数
     refreshTasks()
     startSse()
     return () => {
@@ -640,7 +760,7 @@ const App: React.FC = () => {
         }
         const tab = tabs[0]
         if (!tab) {
-          reject(new Error('未找到当前标签页'))
+          reject(new Error('tab_not_found'))
           return
         }
         resolve(tab)
@@ -648,24 +768,40 @@ const App: React.FC = () => {
     })
   }
 
+  // 使用精确的 hostname 匹配，避免 evil-youtube.com 等域名绕过
+  const ALLOWED_HOSTS: Record<string, string> = {
+    'youtube.com': 'youtube',
+    'www.youtube.com': 'youtube',
+    'm.youtube.com': 'youtube',
+    'youtu.be': 'youtube',
+    'bilibili.com': 'bilibili',
+    'www.bilibili.com': 'bilibili',
+    'm.bilibili.com': 'bilibili',
+  }
+
   const getSiteFromUrl = (url: string) => {
     try {
       const { hostname } = new URL(url)
-      if (hostname.includes('youtube.com') || hostname.includes('youtu.be')) return 'youtube'
-      if (hostname.includes('bilibili.com')) return 'bilibili'
-      return 'other'
+      return ALLOWED_HOSTS[hostname] || 'other'
     } catch {
       return 'other'
     }
   }
 
+  // hostname 到 cookie 域名的映射
+  const COOKIE_DOMAINS: Record<string, string> = {
+    'youtube.com': 'youtube.com',
+    'www.youtube.com': 'youtube.com',
+    'm.youtube.com': 'youtube.com',
+    'youtu.be': 'youtube.com',
+    'bilibili.com': 'bilibili.com',
+    'www.bilibili.com': 'bilibili.com',
+    'm.bilibili.com': 'bilibili.com',
+  }
+
   const collectCookies = (url: string) => {
     const { hostname } = new URL(url)
-    const domain = hostname.includes('youtube.com')
-      ? 'youtube.com'
-      : hostname.includes('bilibili.com')
-        ? 'bilibili.com'
-        : hostname
+    const domain = COOKIE_DOMAINS[hostname] || hostname
     return new Promise<chrome.cookies.Cookie[]>((resolve, reject) => {
       chrome.cookies.getAll({ domain }, (cookies) => {
         if (chrome.runtime.lastError) {
@@ -714,9 +850,9 @@ const App: React.FC = () => {
     overlayTimerRef.current = window.setTimeout(run, delayMs)
   }
 
-  const guardTourAction = (message = '请先完成新手引导') => {
+  const guardTourAction = () => {
     if (tourMode !== 'auto') return false
-    showToast('info', message)
+    showToast('info', t('tour.completeFirst'))
     return true
   }
 
@@ -733,7 +869,7 @@ const App: React.FC = () => {
       const tab = await getActiveTab()
       const url = tab.url || ''
       if (!url.startsWith('http')) {
-        throw new Error('当前页面不支持转写')
+        throw new Error(t('errors.pageNotSupported'))
       }
       const payload = {
         url,
@@ -746,29 +882,34 @@ const App: React.FC = () => {
       })
       await refreshTasks()
     } catch (error: any) {
-      showToast('error', error.message || '添加任务失败')
+      showToast('error', error.message || t('errors.addTaskFailed'))
     } finally {
       setIsAdding(false)
     }
   }
 
   const handleCancel = (task: TaskItem) => {
-    setPendingCancel(task)
+    setConfirmModalConfig({
+      isOpen: true,
+      title: t('modal.cancelTask.title'),
+      message: t('modal.cancelTask.message'),
+      description: task.title || task.url,
+      onConfirm: async () => {
+        await confirmCancel(task)
+        setConfirmModalConfig((prev) => ({ ...prev, isOpen: false }))
+      },
+      variant: 'warning',
+    })
   }
 
-  const confirmCancel = async () => {
-    if (guardTourAction()) {
-      setPendingCancel(null)
-      return
-    }
-    const task = pendingCancel
-    if (!task) return
-    setPendingCancel(null)
+  const confirmCancel = async (task: TaskItem) => {
+    if (guardTourAction()) return
     try {
       await apiFetch(`/api/tasks/${task.id}/cancel`, { method: 'POST' })
       await refreshTasks()
+      showToast('info', t('task.canceled'))
     } catch (error: any) {
-      showToast('error', error.message || '取消失败')
+      showToast('error', error.message || t('errors.cancelTaskFailed'))
     }
   }
 
@@ -785,7 +926,7 @@ const App: React.FC = () => {
       await apiFetch(`/api/tasks/${task.id}/retry`, { method: 'POST' })
       await refreshTasks()
     } catch (error: any) {
-      showToast('error', error.message || '重试失败')
+      showToast('error', error.message || t('errors.retryFailed'))
     }
   }
 
@@ -795,7 +936,7 @@ const App: React.FC = () => {
       await apiFetch(`/api/tasks/${task.id}`, { method: 'DELETE' })
       await refreshTasks()
     } catch (error: any) {
-      showToast('error', error.message || '删除失败')
+      showToast('error', error.message || t('errors.deleteFailed'))
     }
   }
 
@@ -808,7 +949,7 @@ const App: React.FC = () => {
       })
       await refreshTasks()
     } catch (error: any) {
-      showToast('error', error.message || '清空队列失败')
+      showToast('error', error.message || t('errors.clearQueueFailed'))
     }
   }
 
@@ -824,12 +965,26 @@ const App: React.FC = () => {
       await ensureService(true)
     } catch (error: any) {
       if (error?.message === 'tour_active') return
-      showToast('error', error?.message || '连接失败')
+      showToast('error', error?.message || t('errors.connectFailed'))
     }
   }
 
   const handleStopService = async () => {
     if (guardTourAction()) return
+    setConfirmModalConfig({
+      isOpen: true,
+      title: t('modal.stopService.title'),
+      message: t('modal.stopService.message'),
+      description: t('modal.stopService.description'),
+      onConfirm: async () => {
+        await confirmStopService()
+        setConfirmModalConfig((prev) => ({ ...prev, isOpen: false }))
+      },
+      variant: 'danger',
+    })
+  }
+
+  const confirmStopService = async () => {
     try {
       await sendNative('shutdown')
       setServiceStatus('idle')
@@ -842,9 +997,9 @@ const App: React.FC = () => {
         sseRef.current.close()
         sseRef.current = null
       }
-      showToast('success', '已停止本地服务')
+      showToast('success', t('toast.serviceStopped'))
     } catch (error: any) {
-      showToast('error', error?.message || '停止服务失败')
+      showToast('error', error?.message || t('errors.stopServiceFailed'))
     }
   }
 
@@ -874,7 +1029,8 @@ const App: React.FC = () => {
     setTourStep((prev) => prev + 1)
   }
 
-  const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms))
+  // 最小延迟，仅用于让用户看到步骤切换
+  const UI_STEP_DELAY = 100
 
   const updateStepStatus = (id: string, status: DiagnosticStatus) => {
     setDiagnosticSteps((prev) => prev.map((step) => (step.id === id ? { ...step, status } : step)))
@@ -889,10 +1045,10 @@ const App: React.FC = () => {
   const runDiagnostics = async () => {
     if (guardTourAction()) return
     const steps: DiagnosticStep[] = [
-      { id: 'native', label: '检查 Native Host 连接', status: 'pending' },
-      { id: 'service', label: '检查本地服务启动', status: 'pending' },
-      { id: 'health', label: '检查服务健康状态', status: 'pending' },
-      { id: 'token', label: '验证鉴权 Token', status: 'pending' },
+      { id: 'native', label: t('diagnostic.steps.native'), status: 'pending' },
+      { id: 'service', label: t('diagnostic.steps.service'), status: 'pending' },
+      { id: 'health', label: t('diagnostic.steps.health'), status: 'pending' },
+      { id: 'token', label: t('diagnostic.steps.token'), status: 'pending' },
     ]
     setDiagnosticRunId((prev) => prev + 1)
     setDiagnosticSteps(steps)
@@ -907,30 +1063,29 @@ const App: React.FC = () => {
 
     try {
       updateStepStatus('native', 'running')
-      await sleep(900)
       await sendNative('getStatus')
       updateStepStatus('native', 'done')
       setProgressTarget(Math.round((1 / totalSteps) * 100))
+      await new Promise((r) => setTimeout(r, UI_STEP_DELAY))
 
       updateStepStatus('service', 'running')
-      await sleep(1100)
       const ensure = await sendNative('ensureRunning')
       currentPort = ensure.port
       currentToken = ensure.token
       updateStepStatus('service', 'done')
       setProgressTarget(Math.round((2 / totalSteps) * 100))
+      await new Promise((r) => setTimeout(r, UI_STEP_DELAY))
 
       updateStepStatus('health', 'running')
-      await sleep(900)
       const health = await fetch(`http://127.0.0.1:${currentPort}/health`)
       if (!health.ok) {
         throw new Error('health_failed')
       }
       updateStepStatus('health', 'done')
       setProgressTarget(Math.round((3 / totalSteps) * 100))
+      await new Promise((r) => setTimeout(r, UI_STEP_DELAY))
 
       updateStepStatus('token', 'running')
-      await sleep(1000)
       const auth = await fetch(`http://127.0.0.1:${currentPort}/api/tasks`, {
         headers: { Authorization: `Bearer ${currentToken}` },
       })
@@ -943,42 +1098,51 @@ const App: React.FC = () => {
       updateStepStatus('token', 'done')
       setProgressTarget(100)
 
-      finalizeDiagnostic(true, '诊断通过', '本地服务与 Native Host 工作正常。', [
-        '可以返回任务面板继续使用',
-      ])
+      finalizeDiagnostic(
+        true,
+        t('diagnostic.results.passed.title'),
+        t('diagnostic.results.passed.detail'),
+        [t('diagnostic.results.passed.action')]
+      )
     } catch (error: any) {
-      const message = error?.message || '诊断失败'
+      const message = error?.message || 'unknown'
       if (message === 'native_error' || message.includes('Native host')) {
         updateStepStatus('native', 'fail')
-        finalizeDiagnostic(false, 'Native Host 未连接', '无法与本地伴随程序建立连接。', [
-          '确认已执行安装脚本并填写正确扩展 ID',
-          '检查 manifest path 是否指向 host-macos.sh',
-          '确认脚本具备可执行权限',
-        ])
+        finalizeDiagnostic(
+          false,
+          t('diagnostic.results.nativeFailed.title'),
+          t('diagnostic.results.nativeFailed.detail'),
+          t('diagnostic.results.nativeFailed.actions', { returnObjects: true }) as string[]
+        )
         return
       }
       if (message === 'service_start_failed' || message === 'health_failed') {
         updateStepStatus('service', 'fail')
-        finalizeDiagnostic(false, '本地服务启动失败', '服务未能成功启动或健康检查失败。', [
-          '确认端口未被占用（默认 8001）',
-          '确认 Python 环境与依赖已安装',
-          '查看 native-host.log 获取启动信息',
-        ])
+        finalizeDiagnostic(
+          false,
+          t('diagnostic.results.serviceFailed.title'),
+          t('diagnostic.results.serviceFailed.detail'),
+          t('diagnostic.results.serviceFailed.actions', { returnObjects: true }) as string[]
+        )
         return
       }
       if (message === 'token_mismatch' || message === 'token_missing') {
         updateStepStatus('token', 'fail')
-        finalizeDiagnostic(false, 'Token 校验失败', '服务已启动，但鉴权 token 不一致。', [
-          '删除 service.token 后重启服务',
-          '确认 host 与服务使用同一 token 路径',
-        ])
+        finalizeDiagnostic(
+          false,
+          t('diagnostic.results.tokenFailed.title'),
+          t('diagnostic.results.tokenFailed.detail'),
+          t('diagnostic.results.tokenFailed.actions', { returnObjects: true }) as string[]
+        )
         return
       }
       updateStepStatus('health', 'fail')
-      finalizeDiagnostic(false, '诊断未通过', '未能完成全部检查步骤。', [
-        '查看 native-host.log 获取详细信息',
-        '尝试重新连接或重启服务',
-      ])
+      finalizeDiagnostic(
+        false,
+        t('diagnostic.results.unknownFailed.title'),
+        t('diagnostic.results.unknownFailed.detail'),
+        t('diagnostic.results.unknownFailed.actions', { returnObjects: true }) as string[]
+      )
     }
   }
 
@@ -994,22 +1158,7 @@ const App: React.FC = () => {
   }
 
   const statusBadge = (status: TaskStatus) => {
-    switch (status) {
-      case 'queued':
-        return '等待中'
-      case 'downloading':
-        return '下载中'
-      case 'transcribing':
-        return '转写中'
-      case 'done':
-        return '已完成'
-      case 'error':
-        return '失败'
-      case 'canceled':
-        return '已取消'
-      default:
-        return status
-    }
+    return t(`task.status.${status}`)
   }
 
   const statusTone = (status: TaskStatus) => {
@@ -1041,15 +1190,26 @@ const App: React.FC = () => {
 
       <header className="px-6 py-5 bg-white/70 backdrop-blur-xl border-b border-white/40 flex items-center justify-between sticky top-0 z-20">
         <div>
-          <h1 className="text-base font-extrabold tracking-tight text-slate-800">转写任务面板</h1>
-          <p className="text-[11px] text-indigo-500 font-black tracking-widest uppercase">Local Queue</p>
+          <h1 className="text-base font-extrabold tracking-tight text-slate-800">{t('app.title')}</h1>
+          <p className="text-[11px] text-indigo-500 font-black tracking-widest uppercase">{t('app.subtitle')}</p>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => {
+              const newLang = i18n.language === 'zh' ? 'en' : 'zh'
+              i18n.changeLanguage(newLang)
+            }}
+            className="rounded-full border border-slate-200 px-3 py-1 text-[10px] font-bold text-slate-600 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-sm hover:text-slate-800 hover:border-slate-300"
+            title={t('language.' + (i18n.language === 'zh' ? 'en' : 'zh'))}
+          >
+            <Globe size={12} className="inline mr-1" />
+            {i18n.language === 'zh' ? 'EN' : '中文'}
+          </button>
           <button
             onClick={startTour}
             className="rounded-full border border-indigo-100 px-3 py-1 text-[10px] font-bold text-indigo-500 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-sm hover:text-indigo-600"
           >
-            新手引导
+            {t('tour.guide')}
           </button>
           <button
             ref={serviceBadgeRef}
@@ -1063,20 +1223,29 @@ const App: React.FC = () => {
             disabled={serviceStatus === 'connecting' || serviceStatus === 'starting'}
             className={`inline-flex items-center gap-1 rounded-2xl px-3 py-1.5 text-[10px] font-black tracking-wider shadow-sm border transition-all duration-200 ${
               serviceStatus === 'ready'
-                ? 'bg-white text-emerald-600 border-emerald-100 hover:-translate-y-0.5 hover:shadow-sm'
+                ? 'service-button-ready bg-white text-emerald-600 border-emerald-100 min-w-[100px] justify-center'
                 : serviceStatus === 'connecting' || serviceStatus === 'starting'
-                  ? 'bg-white text-indigo-500 border-indigo-100'
-                  : 'bg-white text-rose-500 border-rose-100 hover:-translate-y-0.5 hover:shadow-sm'
+                ? 'bg-white text-indigo-500 border-indigo-100'
+                : 'bg-white text-rose-500 border-rose-100 hover:-translate-y-0.5 hover:shadow-sm'
             }`}
           >
             {serviceStatus === 'ready' && <Power size={12} />}
-            {serviceStatus === 'ready'
-              ? '服务已连接 · 停止'
+            {serviceStatus === 'error'
+              ? t('service.notConnected')
+              : serviceStatus === 'idle' || serviceStatus === 'connecting'
+              ? t('service.connecting')
               : serviceStatus === 'starting'
-                ? '启动中'
-                : serviceStatus === 'connecting'
-                  ? '连接中'
-                  : '服务未连接 · 重试'}
+              ? modelLoading === true
+                ? t('service.modelLoading')
+                : t('service.starting')
+              : modelLoading === true
+              ? t('service.modelLoading')
+              : (
+                <>
+                  <span className="button-text-default">{t('service.connected')}</span>
+                  <span className="button-text-hover">{t('service.stop')}</span>
+                </>
+              )}
           </button>
         </div>
       </header>
@@ -1085,23 +1254,23 @@ const App: React.FC = () => {
         {(serviceStatus === 'ready' || serviceStatus === 'starting') && modelLoading && (
           <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-indigo-100 bg-white/80 px-4 py-2 text-xs font-semibold text-indigo-600 shadow-sm">
             <ArrowClockwise size={12} className="animate-spin" />
-            模型加载中
+            {t('service.modelLoading')}
           </div>
         )}
         {(serviceStatus === 'error' || diagnosticStage !== 'idle') && (
           <div className="mb-6 rounded-[24px] bg-slate-50 p-5 shadow-sm list-entry">
             {diagnosticStage === 'idle' && (
               <div className="flex flex-col items-center justify-center text-center">
-                <div className="text-sm font-semibold text-slate-700">诊断工具</div>
+                <div className="text-sm font-semibold text-slate-700">{t('diagnostic.title')}</div>
                 <p className="mt-1 text-xs text-slate-400">
-                  一键检查本地伴随程序与服务状态，定位问题原因。
+                  {t('diagnostic.description')}
                 </p>
                 {serviceStatus === 'error' && (
                   <div className="mt-3 flex items-center gap-2 rounded-full bg-rose-50 px-3 py-1 text-[11px] text-rose-500">
                     <WarningCircle size={12} />
-                    <span className="font-semibold">本地服务未就绪</span>
+                    <span className="font-semibold">{t('service.notReady')}</span>
                     <span className="text-rose-400">
-                      {serviceError || '请检查本地服务与 Native Host 安装。'}
+                      {getServiceErrorMessage(serviceError)}
                     </span>
                   </div>
                 )}
@@ -1110,7 +1279,7 @@ const App: React.FC = () => {
                   onClick={runDiagnostics}
                   className="inline-flex items-center gap-2 rounded-full bg-indigo-600 px-4 py-2 text-white text-xs font-bold transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
                 >
-                  开始诊断
+                  {t('diagnostic.start')}
                 </button>
                 {serviceStatus === 'error' && (
                   <button
@@ -1118,7 +1287,7 @@ const App: React.FC = () => {
                     className="inline-flex items-center gap-2 rounded-full border border-rose-200 bg-white px-4 py-2 text-rose-500 text-xs font-bold transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
                   >
                     <ArrowClockwise size={14} />
-                    重新连接
+                    {t('diagnostic.reconnect')}
                   </button>
                 )}
                 </div>
@@ -1210,7 +1379,7 @@ const App: React.FC = () => {
                   onClick={() => setDiagnosticStage('idle')}
                   className="mt-2 inline-flex items-center justify-center rounded-full border border-slate-200 px-4 py-1.5 text-xs font-semibold text-slate-600 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
                 >
-                  返回
+                  {t('diagnostic.back')}
                 </button>
               </div>
             )}
@@ -1225,14 +1394,14 @@ const App: React.FC = () => {
             className="flex items-center gap-2 rounded-2xl bg-indigo-600 px-4 py-2 text-white text-sm font-bold shadow-lg shadow-indigo-600/20 disabled:opacity-50 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-indigo-600/40"
           >
             {isAdding ? <ArrowClockwise size={16} className="animate-spin" /> : <Plus size={16} />}
-            创建转写任务
+            {t('task.create')}
           </button>
           <button
             onClick={handleClearQueue}
             ref={clearQueueRef}
             className="text-xs font-bold text-slate-500 transition-all duration-200 hover:text-slate-700 hover:-translate-y-0.5"
           >
-            清空队列
+            {t('task.clearQueue')}
           </button>
         </div>
 
@@ -1240,8 +1409,8 @@ const App: React.FC = () => {
           <div className="flex items-stretch text-xs font-semibold">
           {(
             [
-              { key: 'active', label: '进行中', value: taskStats.inProgress },
-              { key: 'done', label: '已完成', value: taskStats.done },
+              { key: 'active', label: t('task.inProgress'), value: taskStats.inProgress },
+              { key: 'done', label: t('task.completed'), value: taskStats.done },
             ] as const
           ).map((item, index, arr) => (
             <React.Fragment key={item.key}>
@@ -1291,7 +1460,7 @@ const App: React.FC = () => {
           )}
           {serviceStatus === 'ready' && hasSnapshot && filteredTasks.length === 0 && (
             <div className="rounded-3xl border border-white bg-white/70 p-8 text-center text-slate-400 text-sm">
-              暂无任务，打开视频页面后点击“创建转写任务”。
+              {t('task.noTasks')}
             </div>
           )}
           {serviceStatus === 'ready' &&
@@ -1310,7 +1479,7 @@ const App: React.FC = () => {
             return (
               <div
                 key={`${task.id}-${animateKey}`}
-                className={`task-card list-entry relative rounded-3xl border border-white bg-white/80 p-5 shadow-sm ${
+                className={`task-card list-entry group relative rounded-3xl border border-white bg-white/80 p-5 shadow-sm ${
                   isCurrent ? 'ring-2 ring-indigo-200 shadow-md' : ''
                 } ${isWaiting ? 'opacity-60' : ''}`}
                 style={{ animationDelay: `${0.05 + index * 0.07}s` }}
@@ -1318,20 +1487,15 @@ const App: React.FC = () => {
                 {isActive && (
                   <button
                     onClick={() => handleCancel(task)}
-                    className="absolute left-4 top-4 inline-flex h-6 w-6 items-center justify-center rounded-full bg-rose-500 text-white shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-rose-600"
-                    title="取消任务"
+                    className="absolute top-3 right-3 p-2 z-30 text-slate-300 opacity-100 sm:opacity-0 group-hover:opacity-100 group-hover:text-rose-500 hover:bg-rose-50 rounded-full transition-all duration-300 hover:scale-110"
+                    title={t('modal.cancelTask.title')}
                   >
-                    <X size={10} />
+                    <Trash size={16} />
                   </button>
                 )}
 
-                <div
-                  className={`absolute right-4 top-4 px-2.5 py-1 rounded-full text-[10px] font-black border ${statusTone(task.status)}`}
-                >
-                  {statusBadge(task.status)}
-                </div>
 
-                <div className={`min-w-0 ${isActive ? 'pl-8' : ''} pr-16`}>
+                <div className="min-w-0 pr-12">
                   <p className="text-sm font-semibold text-slate-800 leading-snug break-words">
                     {task.title || task.url}
                   </p>
@@ -1347,7 +1511,7 @@ const App: React.FC = () => {
                         ) : (
                           <ArrowClockwise size={12} className="animate-spin text-indigo-500" />
                         )}
-                        下载进度
+                        {t('task.downloadProgress')}
                       </span>
                       <span>{task.downloadProgress}%</span>
                     </div>
@@ -1368,7 +1532,7 @@ const App: React.FC = () => {
                       ) : (
                         <Clock size={12} className="text-slate-400" />
                       )}
-                        转写进度
+                        {t('task.transcribeProgress')}
                       </span>
                     <span>{task.transcribeProgress}%</span>
                   </div>
@@ -1384,13 +1548,13 @@ const App: React.FC = () => {
                 {task.status === 'queued' && task.queuePosition != null && (
                   <div className="mt-3 flex items-center gap-2 text-xs text-slate-400">
                     <Clock size={12} />
-                    当前排队位置：{task.queuePosition}
+                    {t('task.queuePosition')}: {task.queuePosition}
                   </div>
                 )}
 
                 {task.status === 'error' && (
                   <div className="mt-3 text-xs text-rose-500">
-                    {task.errorMessage || '任务失败'}
+                    {task.errorMessage || t('task.failed')}
                   </div>
                 )}
 
@@ -1401,7 +1565,7 @@ const App: React.FC = () => {
                       className="inline-flex items-center gap-1 rounded-full border border-indigo-200 px-3 py-1 text-xs font-bold text-indigo-600 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-sm hover:border-indigo-300"
                     >
                       <ArrowClockwise size={12} />
-                      重试
+                      {t('task.retry')}
                     </button>
                   )}
 
@@ -1411,7 +1575,7 @@ const App: React.FC = () => {
                       className="inline-flex items-center gap-1 rounded-full border border-emerald-200 px-3 py-1 text-xs font-bold text-emerald-600 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-sm hover:border-emerald-300"
                     >
                       <DownloadSimple size={12} />
-                      下载 TXT
+                      {t('task.downloadTxt')}
                     </button>
                   )}
 
@@ -1423,14 +1587,14 @@ const App: React.FC = () => {
                       className="inline-flex items-center gap-1 rounded-full border border-rose-200 px-3 py-1 text-xs font-bold text-rose-500 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-sm hover:border-rose-300"
                     >
                       <Trash size={12} />
-                      删除
+                      {t('task.delete')}
                     </button>
                   )}
 
                   {task.status === 'done' && (
                     <div className="inline-flex items-center gap-1 text-xs text-emerald-500">
                       <CheckCircle size={12} />
-                      已完成
+                      {t('task.status.done')}
                     </div>
                   )}
                 </div>
@@ -1444,7 +1608,7 @@ const App: React.FC = () => {
             onClick={handleLoadMore}
             className="w-full rounded-2xl border border-indigo-100 bg-white/80 py-2 text-xs font-bold text-indigo-500 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
           >
-            更多
+            {t('task.loadMore')}
           </button>
         )}
       </main>
@@ -1452,7 +1616,7 @@ const App: React.FC = () => {
       {overlayVisible && (
         <div className={`loading-overlay ${overlayHiding ? 'loading-overlay-exit' : ''}`}>
           <div className="loading-blob" />
-          <div className="loading-text">启动中</div>
+          <div className="loading-text">{t('service.starting')}</div>
         </div>
       )}
 
@@ -1477,7 +1641,7 @@ const App: React.FC = () => {
               <div className="tour-header">
                 <div className="tour-title">{activeTour.title}</div>
                 <button className="tour-skip" onClick={closeTour}>
-                  跳过
+                  {t('tour.skip')}
                 </button>
               </div>
               <div className="tour-content">{activeTour.content}</div>
@@ -1491,10 +1655,10 @@ const App: React.FC = () => {
                     onClick={prevTour}
                     disabled={isFirstTourStep}
                   >
-                    上一步
+                    {t('tour.prev')}
                   </button>
                   <button className="tour-btn tour-btn-primary" onClick={nextTour}>
-                    {isLastTourStep ? '完成' : '下一步'}
+                    {isLastTourStep ? t('tour.finish') : t('tour.next')}
                   </button>
                 </div>
               </div>
@@ -1528,39 +1692,15 @@ const App: React.FC = () => {
         ))}
       </div>
 
-      {pendingCancel && (
-        <div
-          className="fixed inset-0 z-30 flex items-center justify-center bg-black/30 backdrop-blur-sm"
-          onClick={() => setPendingCancel(null)}
-        >
-          <div
-            className="w-[90%] max-w-sm rounded-3xl bg-white p-5 shadow-xl"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="flex items-center gap-2 text-sm font-semibold text-slate-800">
-              <WarningCircle size={16} className="text-rose-500" />
-              确认取消任务？
-            </div>
-            <p className="mt-2 text-xs text-slate-500 break-words">
-              {pendingCancel.title || pendingCancel.url}
-            </p>
-            <div className="mt-4 flex justify-end gap-2">
-              <button
-                onClick={() => setPendingCancel(null)}
-                className="inline-flex items-center justify-center rounded-full border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
-              >
-                返回
-              </button>
-              <button
-                onClick={confirmCancel}
-                className="inline-flex items-center justify-center rounded-full bg-rose-500 px-4 py-2 text-xs font-semibold text-white transition-all duration-200 hover:-translate-y-0.5 hover:bg-rose-600 hover:shadow-md"
-              >
-                确认取消
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmModal
+        isOpen={confirmModalConfig.isOpen}
+        onClose={() => setConfirmModalConfig((prev) => ({ ...prev, isOpen: false }))}
+        onConfirm={confirmModalConfig.onConfirm}
+        title={confirmModalConfig.title}
+        message={confirmModalConfig.message}
+        description={confirmModalConfig.description}
+        variant={confirmModalConfig.variant}
+      />
     </div>
   )
 }
