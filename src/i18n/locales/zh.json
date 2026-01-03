@@ -1,0 +1,188 @@
+{
+  "app": {
+    "title": "转写任务面板",
+    "subtitle": "Local Queue"
+  },
+  "service": {
+    "connected": "服务已连接",
+    "connecting": "连接中",
+    "starting": "启动中",
+    "modelLoading": "模型加载中",
+    "notConnected": "服务未连接 · 重试",
+    "stop": "停止服务",
+    "notReady": "本地服务未就绪"
+  },
+  "errors": {
+    "serviceStartFailed": "服务启动失败，请查看日志",
+    "nativeError": "Native Host 通信错误",
+    "nativeTimeout": "连接超时，请检查 Native Host",
+    "tokenMismatch": "Token 验证失败，请重启服务",
+    "connectionRefused": "连接被拒绝，请确认服务已启动",
+    "checkNativeHost": "请检查本地服务与 Native Host 安装",
+    "unknownError": "未知错误",
+    "connectionTimeout": "连接本地服务超时，请检查 Native Host 是否正常运行",
+    "serviceTimeout": "本地服务响应超时",
+    "requestTimeout": "请求超时，请检查本地服务状态",
+    "refreshTasksFailed": "刷新任务列表失败",
+    "addTaskFailed": "添加任务失败",
+    "cancelTaskFailed": "取消任务失败",
+    "retryFailed": "重试失败",
+    "deleteFailed": "删除失败",
+    "clearQueueFailed": "清空队列失败",
+    "connectFailed": "连接失败",
+    "stopServiceFailed": "停止服务失败",
+    "pageNotSupported": "没有检测到视频信息",
+    "sseReconnectFailed": "实时连接失败，请刷新页面重试",
+    "requestFailed": "请求失败",
+    "cannotConnectService": "无法连接本地服务",
+    "serviceUnavailable": "本地服务不可用"
+  },
+  "task": {
+    "create": "创建转写任务",
+    "clearQueue": "清空队列",
+    "inProgress": "进行中",
+    "completed": "已完成",
+    "status": {
+      "queued": "等待中",
+      "downloading": "下载中",
+      "transcribing": "转写中",
+      "done": "已完成",
+      "error": "失败",
+      "canceled": "已取消"
+    },
+    "downloadProgress": "下载进度",
+    "transcribeProgress": "转写进度",
+    "queuePosition": "当前排队位置",
+    "failed": "任务失败",
+    "retry": "重试",
+    "downloadTxt": "下载 TXT",
+    "delete": "删除",
+    "canceled": "任务已取消",
+    "noTasks": "暂无任务，打开视频页面后点击「创建转写任务」。",
+    "loadMore": "更多"
+  },
+  "modal": {
+    "cancelTask": {
+      "title": "取消任务",
+      "message": "确定要取消任务吗？"
+    },
+    "stopService": {
+      "title": "停止服务",
+      "message": "确定要停止本地服务吗？",
+      "description": "正在进行的任务将被中断"
+    },
+    "confirm": "确定",
+    "cancel": "取消"
+  },
+  "diagnostic": {
+    "title": "诊断工具",
+    "description": "一键检查本地伴随程序与服务状态，定位问题原因。",
+    "start": "开始诊断",
+    "reconnect": "重新连接",
+    "back": "返回",
+    "steps": {
+      "native": "检查 Native Host 连接",
+      "service": "检查本地服务启动",
+      "health": "检查服务健康状态",
+      "token": "验证鉴权 Token"
+    },
+    "results": {
+      "passed": {
+        "title": "诊断通过",
+        "detail": "本地服务与 Native Host 工作正常。",
+        "action": "可以返回任务面板继续使用"
+      },
+      "nativeFailed": {
+        "title": "Native Host 未连接",
+        "detail": "无法与本地伴随程序建立连接。",
+        "actions": [
+          "确认已执行安装脚本并填写正确扩展 ID",
+          "检查 manifest path 是否指向 host-macos.sh",
+          "确认脚本具备可执行权限"
+        ]
+      },
+      "serviceFailed": {
+        "title": "本地服务启动失败",
+        "detail": "服务未能成功启动或健康检查失败。",
+        "actions": [
+          "确认端口未被占用（默认 8001）",
+          "确认 Python 环境与依赖已安装",
+          "查看 native-host.log 获取启动信息"
+        ]
+      },
+      "tokenFailed": {
+        "title": "Token 校验失败",
+        "detail": "服务已启动，但鉴权 token 不一致。",
+        "actions": [
+          "删除 service.token 后重启服务",
+          "确认 host 与服务使用同一 token 路径"
+        ]
+      },
+      "unknownFailed": {
+        "title": "诊断未通过",
+        "detail": "未能完成全部检查步骤。",
+        "actions": [
+          "查看 native-host.log 获取详细信息",
+          "尝试重新连接或重启服务"
+        ]
+      }
+    }
+  },
+  "tour": {
+    "guide": "新手引导",
+    "skip": "跳过",
+    "prev": "上一步",
+    "next": "下一步",
+    "finish": "完成",
+    "steps": {
+      "status": {
+        "title": "服务连接",
+        "content": "等待本地服务连接成功。"
+      },
+      "create": {
+        "title": "创建任务",
+        "content": "浏览器打开你喜欢的视频，创建转写任务。"
+      },
+      "list": {
+        "title": "任务进度",
+        "content": "在这里查看实时任务进度与已完成的任务并下载文件。"
+      },
+      "clear": {
+        "title": "清空队列",
+        "content": "点击一键清空等待中的任务。"
+      }
+    },
+    "completeFirst": "请先完成新手引导"
+  },
+  "toast": {
+    "serviceStopped": "已停止本地服务"
+  },
+  "welcome": {
+    "title": "欢迎使用视频转文字助手",
+    "subtitle": "快速、私密、高效的本地视频音频转录工具",
+    "getStarted": "开始使用",
+    "features": {
+      "privacy": {
+        "title": "100% 本地隐私",
+        "description": "AI 模型在浏览器内运行，您的音频数据永不上传至任何服务器。"
+      },
+      "service": {
+        "title": "本地服务说明",
+        "description": "首次使用需安装本地服务并下载模型权重，以便离线转写视频音频。"
+      }
+    },
+    "howToStart": {
+      "title": "如何开始使用？",
+      "steps": [
+        "打开 YouTube 或 Bilibili 视频页面",
+        "点击浏览器右上角的插件图标打开侧边栏",
+        "点击\"开始识别\"按钮（首次需确认下载模型）"
+      ]
+    },
+    "footer": "您可以随时在侧边栏查看实时转录进度。"
+  },
+  "language": {
+    "zh": "中文",
+    "en": "English"
+  }
+}

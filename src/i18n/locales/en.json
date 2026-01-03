@@ -1,0 +1,188 @@
+{
+  "app": {
+    "title": "Transcription Panel",
+    "subtitle": "Local Queue"
+  },
+  "service": {
+    "connected": "Service Connected",
+    "connecting": "Connecting",
+    "starting": "Starting",
+    "modelLoading": "Loading Model",
+    "notConnected": "Not Connected · Retry",
+    "stop": "Stop Service",
+    "notReady": "Service Not Ready"
+  },
+  "errors": {
+    "serviceStartFailed": "Service failed to start, check logs",
+    "nativeError": "Native Host communication error",
+    "nativeTimeout": "Connection timeout, check Native Host",
+    "tokenMismatch": "Token verification failed, restart service",
+    "connectionRefused": "Connection refused, ensure service is running",
+    "checkNativeHost": "Check local service and Native Host installation",
+    "unknownError": "Unknown error",
+    "connectionTimeout": "Connection timeout, check if Native Host is running",
+    "serviceTimeout": "Service response timeout",
+    "requestTimeout": "Request timeout, check service status",
+    "refreshTasksFailed": "Failed to refresh task list",
+    "addTaskFailed": "Failed to add task",
+    "cancelTaskFailed": "Failed to cancel task",
+    "retryFailed": "Retry failed",
+    "deleteFailed": "Delete failed",
+    "clearQueueFailed": "Failed to clear queue",
+    "connectFailed": "Connection failed",
+    "stopServiceFailed": "Failed to stop service",
+    "pageNotSupported": "No video information detected",
+    "sseReconnectFailed": "Real-time connection failed, please refresh",
+    "requestFailed": "Request failed",
+    "cannotConnectService": "Cannot connect to local service",
+    "serviceUnavailable": "Local service unavailable"
+  },
+  "task": {
+    "create": "Create Task",
+    "clearQueue": "Clear Queue",
+    "inProgress": "In Progress",
+    "completed": "Completed",
+    "status": {
+      "queued": "Queued",
+      "downloading": "Downloading",
+      "transcribing": "Transcribing",
+      "done": "Done",
+      "error": "Error",
+      "canceled": "Canceled"
+    },
+    "downloadProgress": "Download Progress",
+    "transcribeProgress": "Transcription Progress",
+    "queuePosition": "Queue Position",
+    "failed": "Task failed",
+    "retry": "Retry",
+    "downloadTxt": "Download TXT",
+    "delete": "Delete",
+    "canceled": "Task canceled",
+    "noTasks": "No tasks. Open a video page and click \"Create Task\".",
+    "loadMore": "Load More"
+  },
+  "modal": {
+    "cancelTask": {
+      "title": "Cancel Task",
+      "message": "Are you sure you want to cancel this task?"
+    },
+    "stopService": {
+      "title": "Stop Service",
+      "message": "Are you sure you want to stop the service?",
+      "description": "Active tasks will be interrupted"
+    },
+    "confirm": "Confirm",
+    "cancel": "Cancel"
+  },
+  "diagnostic": {
+    "title": "Diagnostics",
+    "description": "One-click check for local service and Native Host status.",
+    "start": "Start Diagnostics",
+    "reconnect": "Reconnect",
+    "back": "Back",
+    "steps": {
+      "native": "Check Native Host connection",
+      "service": "Check local service startup",
+      "health": "Check service health",
+      "token": "Verify auth token"
+    },
+    "results": {
+      "passed": {
+        "title": "Diagnostics Passed",
+        "detail": "Local service and Native Host are working properly.",
+        "action": "You can return to the task panel"
+      },
+      "nativeFailed": {
+        "title": "Native Host Not Connected",
+        "detail": "Cannot establish connection with local companion.",
+        "actions": [
+          "Confirm installation script was run with correct extension ID",
+          "Check manifest path points to host-macos.sh",
+          "Ensure script has executable permissions"
+        ]
+      },
+      "serviceFailed": {
+        "title": "Service Failed to Start",
+        "detail": "Service failed to start or health check failed.",
+        "actions": [
+          "Ensure port is not in use (default 8001)",
+          "Confirm Python environment and dependencies are installed",
+          "Check native-host.log for startup info"
+        ]
+      },
+      "tokenFailed": {
+        "title": "Token Verification Failed",
+        "detail": "Service started but auth token mismatch.",
+        "actions": [
+          "Delete service.token and restart service",
+          "Ensure host and service use same token path"
+        ]
+      },
+      "unknownFailed": {
+        "title": "Diagnostics Failed",
+        "detail": "Could not complete all check steps.",
+        "actions": [
+          "Check native-host.log for details",
+          "Try reconnecting or restarting service"
+        ]
+      }
+    }
+  },
+  "tour": {
+    "guide": "Guide",
+    "skip": "Skip",
+    "prev": "Previous",
+    "next": "Next",
+    "finish": "Finish",
+    "steps": {
+      "status": {
+        "title": "Service Connection",
+        "content": "Wait for local service to connect."
+      },
+      "create": {
+        "title": "Create Task",
+        "content": "Open a video in your browser and create a transcription task."
+      },
+      "list": {
+        "title": "Task Progress",
+        "content": "View real-time progress and download completed files here."
+      },
+      "clear": {
+        "title": "Clear Queue",
+        "content": "Click to clear all queued tasks."
+      }
+    },
+    "completeFirst": "Please complete the guide first"
+  },
+  "toast": {
+    "serviceStopped": "Service stopped"
+  },
+  "welcome": {
+    "title": "Welcome to Video Text Assistant",
+    "subtitle": "Fast, private, and efficient local video audio transcription tool",
+    "getStarted": "Get Started",
+    "features": {
+      "privacy": {
+        "title": "100% Local Privacy",
+        "description": "AI models run in your browser, your audio data is never uploaded to any server."
+      },
+      "service": {
+        "title": "Local Service Setup",
+        "description": "First-time use requires installing local service and downloading model weights for offline transcription."
+      }
+    },
+    "howToStart": {
+      "title": "How to Get Started?",
+      "steps": [
+        "Open a YouTube or Bilibili video page",
+        "Click the extension icon in the browser toolbar to open the sidebar",
+        "Click the \\\"Start Recognition\\\" button (first time requires model download confirmation)"
+      ]
+    },
+    "footer": "You can view real-time transcription progress in the sidebar at any time."
+  },
+  "language": {
+    "zh": "中文",
+    "en": "English"
+  }
+}
