@@ -10,3 +10,4 @@ native-host/VideoTextHost.pkg
 native-host/macos-pkg/build
 .vscode
 CLAUDE.md
+.claude
