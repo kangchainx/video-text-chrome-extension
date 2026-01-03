@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { WarningCircle } from 'phosphor-react';
 
 interface ConfirmModalProps {
@@ -20,27 +21,28 @@ const ConfirmModal: React.FC<ConfirmModalProps> = ({
   title,
   message,
   description,
-  confirmText = '确认',
-  cancelText = '取消',
+  confirmText,
+  cancelText,
   variant = 'danger',
 }) => {
+  const { t } = useTranslation();
   const [isVisible, setIsVisible] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
+
+  const resolvedConfirmText = confirmText || t('modal.confirm');
+  const resolvedCancelText = cancelText || t('modal.cancel');
 
   useEffect(() => {
     if (isOpen) {
       setIsVisible(true);
-      // 延迟触发动画，确保 DOM 已渲染
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
           setIsAnimating(true);
         });
       });
-      // 防止背景滚动
       document.body.style.overflow = 'hidden';
     } else {
       setIsAnimating(false);
-      // 等待动画结束后再隐藏
       const timer = setTimeout(() => {
         setIsVisible(false);
         document.body.style.overflow = '';
@@ -108,14 +110,14 @@ const ConfirmModal: React.FC<ConfirmModalProps> = ({
             className="confirm-modal-button confirm-modal-button-cancel"
             type="button"
           >
-            {cancelText}
+            {resolvedCancelText}
           </button>
           <button
             onClick={handleConfirm}
             className={`confirm-modal-button confirm-modal-button-confirm ${currentVariant.button}`}
             type="button"
           >
-            {confirmText}
+            {resolvedConfirmText}
           </button>
         </div>
       </div>
