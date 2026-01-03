@@ -22,9 +22,12 @@
   "homepage": "https://github.com/kangchainx/video-text-chrome-extension#readme",
   "dependencies": {
     "@xenova/transformers": "^2.17.2",
+    "i18next": "^25.7.3",
+    "i18next-browser-languagedetector": "^8.2.0",
     "phosphor-react": "^1.4.1",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
+    "react-i18next": "^16.5.1",
     "zustand": "^5.0.9"
   },
   "devDependencies": {
