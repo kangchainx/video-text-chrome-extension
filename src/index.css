@@ -21,6 +21,15 @@ body {
   }
 }
 
+@keyframes slideInUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-slide-in-up {
+  animation: slideInUp 0.4s ease-out forwards;
+}
+
 @keyframes checkPop {
   0% {
     transform: scale(0);
@@ -55,6 +64,21 @@ body {
   border-radius: 9999px;
   background: rgb(79 70 229);
   animation: pulse 1.1s ease-in-out infinite;
+}
+
+@keyframes badgeBounce {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.4);
+  }
+}
+
+.animate-badge-bounce {
+  display: inline-block;
+  animation: badgeBounce 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
 .diag-check {
@@ -557,9 +581,7 @@ body {
   -webkit-backdrop-filter: blur(20px);
   border-radius: 24px;
   padding: 32px;
-  box-shadow: 
-    0 0 0 1px rgba(0, 0, 0, 0.03),
-    0 20px 25px -5px rgba(0, 0, 0, 0.1),
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.03), 0 20px 25px -5px rgba(0, 0, 0, 0.1),
     0 10px 10px -5px rgba(0, 0, 0, 0.04);
   transform: scale(0.9) translateY(20px);
   opacity: 0;
@@ -586,10 +608,12 @@ body {
   width: 56px;
   height: 56px;
   border-radius: 16px;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.6));
-  box-shadow: 
-    0 0 0 1px rgba(0, 0, 0, 0.04),
-    0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.9),
+    rgba(255, 255, 255, 0.6)
+  );
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.04), 0 4px 6px -1px rgba(0, 0, 0, 0.1);
 }
 
 .confirm-modal-title {
