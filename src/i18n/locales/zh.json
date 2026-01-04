@@ -1,7 +1,7 @@
 {
   "app": {
-    "title": "转写任务面板",
-    "subtitle": "Local Queue"
+    "title": "任务中心",
+    "subtitle": "管理您的转写任务"
   },
   "service": {
     "connected": "服务已连接",
@@ -38,7 +38,7 @@
     "serviceUnavailable": "本地服务不可用"
   },
   "task": {
-    "create": "创建转写任务",
+    "create": "添加任务",
     "clearQueue": "清空队列",
     "inProgress": "进行中",
     "completed": "已完成",
@@ -46,6 +46,7 @@
       "queued": "等待中",
       "downloading": "下载中",
       "transcribing": "转写中",
+      "canceling": "取消中...",
       "done": "已完成",
       "error": "失败",
       "canceled": "已取消"
@@ -57,6 +58,10 @@
     "retry": "重试",
     "downloadTxt": "下载 TXT",
     "delete": "删除",
+    "processing": "处理中...",
+    "waitN": "等待 #{{n}}",
+    "queueAhead": "前方排队：{{n}}",
+    "estimatedWait": "预计等待：{{n}} min",
     "canceled": "任务已取消",
     "noTasks": "暂无任务，打开视频页面后点击「创建转写任务」。",
     "loadMore": "更多"
@@ -65,6 +70,10 @@
     "cancelTask": {
       "title": "取消任务",
       "message": "确定要取消任务吗？"
+    },
+    "deleteTask": {
+      "title": "删除任务",
+      "message": "任务删除后将无法找回，确定要删除吗？"
     },
     "stopService": {
       "title": "停止服务",
@@ -129,7 +138,7 @@
     }
   },
   "tour": {
-    "guide": "新手引导",
+    "guide": "引导",
     "skip": "跳过",
     "prev": "上一步",
     "next": "下一步",
@@ -152,7 +161,7 @@
         "content": "点击一键清空等待中的任务。"
       }
     },
-    "completeFirst": "请先完成新手引导"
+    "completeFirst": "请先完成引导"
   },
   "toast": {
     "serviceStopped": "已停止本地服务"

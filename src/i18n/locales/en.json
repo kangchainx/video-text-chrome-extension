@@ -46,6 +46,7 @@
       "queued": "Queued",
       "downloading": "Downloading",
       "transcribing": "Transcribing",
+      "canceling": "Canceling...",
       "done": "Done",
       "error": "Error",
       "canceled": "Canceled"
@@ -65,6 +66,10 @@
     "cancelTask": {
       "title": "Cancel Task",
       "message": "Are you sure you want to cancel this task?"
+    },
+    "deleteTask": {
+      "title": "Delete Task",
+      "message": "The task will be permanently deleted. Are you sure?"
     },
     "stopService": {
       "title": "Stop Service",
