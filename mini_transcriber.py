@@ -66,7 +66,7 @@ def _log_slow(label: str, start: float, extra: str = "") -> None:
 MODEL_SIZE = os.getenv("WHISPER_MODEL", "tiny")
 WHISPER_DEVICE = os.getenv("WHISPER_DEVICE", "cpu")
 WHISPER_COMPUTE = os.getenv("WHISPER_COMPUTE", "int8")
-IDLE_SECONDS = int(os.getenv("TRANSCRIBER_IDLE_SECONDS", "600"))
+IDLE_SECONDS = int(os.getenv("TRANSCRIBER_IDLE_SECONDS", "3600"))
 SLOW_LOG_SECONDS = float(os.getenv("TRANSCRIBER_SLOW_LOG_SECONDS", "5"))
 
 SERVICE_PORT = int(os.getenv("TRANSCRIBER_PORT", "8001"))
@@ -169,6 +169,7 @@ class TaskCancelled(Exception):
 TASK_STATUS_QUEUED = "queued"
 TASK_STATUS_DOWNLOADING = "downloading"
 TASK_STATUS_TRANSCRIBING = "transcribing"
+TASK_STATUS_CANCELING = "canceling"
 TASK_STATUS_DONE = "done"
 TASK_STATUS_ERROR = "error"
 TASK_STATUS_CANCELED = "canceled"
@@ -486,7 +487,15 @@ def _load_tasks_from_db() -> None:
             if task["status"] in (TASK_STATUS_DOWNLOADING, TASK_STATUS_TRANSCRIBING):
                 task["status"] = TASK_STATUS_ERROR
                 task["errorCode"] = "interrupted"
-                task["errorMessage"] = "服务重启导致任务中断，请重试"
+                task["errorMessage"] = "任务已取消，请重试"
+                task["updatedAt"] = now
+                tasks_to_persist.append(task)
+            elif task["status"] == TASK_STATUS_CANCELING:
+                task["status"] = TASK_STATUS_CANCELED
+                task["errorCode"] = None
+                task["errorMessage"] = None
+                task["downloadProgress"] = 0
+                task["transcribeProgress"] = 0
                 task["updatedAt"] = now
                 tasks_to_persist.append(task)
 
@@ -534,6 +543,38 @@ def _update_task(task_id: str, **updates: Any) -> None:
         task = tasks.get(task_id)
         if not task:
             return
+        current_status = task.get("status")
+        if current_status == TASK_STATUS_CANCELED:
+            if updates.get("status") != TASK_STATUS_CANCELED:
+                updates.pop("status", None)
+            for key in (
+                "downloadProgress",
+                "transcribeProgress",
+                "errorCode",
+                "errorMessage",
+                "resultPath",
+                "resultFilename",
+                "audioPath",
+            ):
+                updates.pop(key, None)
+            if not updates:
+                return
+        elif current_status == TASK_STATUS_CANCELING:
+            if updates.get("status") not in (TASK_STATUS_CANCELING, TASK_STATUS_CANCELED):
+                updates.pop("status", None)
+            for key in (
+                "downloadProgress",
+                "transcribeProgress",
+                "errorCode",
+                "errorMessage",
+                "resultPath",
+                "resultFilename",
+                "audioPath",
+            ):
+                if updates.get("status") != TASK_STATUS_CANCELED:
+                    updates.pop(key, None)
+            if not updates:
+                return
         task.update(updates)
         task["updatedAt"] = time.time()
         _db_upsert_task(task)
@@ -752,6 +793,7 @@ def _idle_monitor_loop() -> None:
         if has_active:
             continue
         if idle_for >= IDLE_SECONDS:
+            _log("SERVICE_EXIT_IDLE")
             os._exit(0)
 
 
@@ -819,6 +861,8 @@ def create_task(
 @app.post("/api/tasks/{task_id}/cancel")
 def cancel_task(request: Request, task_id: str, token: Optional[str] = Query(None)):
     _require_token(request, token)
+    should_mark = False
+    should_canceling = False
     with lock:
         task = tasks.get(task_id)
         if not task:
@@ -828,14 +872,17 @@ def cancel_task(request: Request, task_id: str, token: Optional[str] = Query(Non
                 queue.remove(task_id)
             except ValueError:
                 pass
-            _mark_canceled(task_id)
-            return JSONResponse({"ok": True})
+            should_mark = True
         if task["status"] in (TASK_STATUS_DOWNLOADING, TASK_STATUS_TRANSCRIBING):
-            task["cancelRequested"] = True
-            return JSONResponse({"ok": True})
+            should_canceling = True
         if task["status"] in (TASK_STATUS_DONE, TASK_STATUS_ERROR, TASK_STATUS_CANCELED):
-            _mark_canceled(task_id)
+            should_mark = True
+        if task["status"] == TASK_STATUS_CANCELING:
             return JSONResponse({"ok": True})
+    if should_canceling:
+        _update_task(task_id, status=TASK_STATUS_CANCELING, cancelRequested=True)
+    if should_mark:
+        _mark_canceled(task_id)
     return JSONResponse({"ok": True})
 
 
@@ -846,7 +893,7 @@ def retry_task(request: Request, task_id: str, token: Optional[str] = Query(None
         task = tasks.get(task_id)
         if not task:
             raise HTTPException(status_code=404, detail="任务不存在")
-        if task["status"] in (TASK_STATUS_DOWNLOADING, TASK_STATUS_TRANSCRIBING):
+        if task["status"] in (TASK_STATUS_DOWNLOADING, TASK_STATUS_TRANSCRIBING, TASK_STATUS_CANCELING):
             raise HTTPException(status_code=400, detail="任务正在执行")
         task["status"] = TASK_STATUS_QUEUED
         task["downloadProgress"] = 0
@@ -868,7 +915,7 @@ def delete_task(request: Request, task_id: str, token: Optional[str] = Query(Non
         task = tasks.get(task_id)
         if not task:
             raise HTTPException(status_code=404, detail="任务不存在")
-        if task["status"] in (TASK_STATUS_DOWNLOADING, TASK_STATUS_TRANSCRIBING):
+        if task["status"] in (TASK_STATUS_DOWNLOADING, TASK_STATUS_TRANSCRIBING, TASK_STATUS_CANCELING):
             raise HTTPException(status_code=400, detail="任务正在执行")
         try:
             queue.remove(task_id)
@@ -960,8 +1007,17 @@ def download_result(request: Request, task_id: str, token: Optional[str] = Query
 
 if __name__ == "__main__":
     import uvicorn
+    import signal
 
     multiprocessing.freeze_support()
+
+    def _on_signal(sig, frame):
+        _log(f"SERVICE_EXIT_SIGNAL signal={sig}")
+        os._exit(0)
+
+    signal.signal(signal.SIGTERM, _on_signal)
+    signal.signal(signal.SIGINT, _on_signal)
+
     _log(f"WEB_CONCURRENCY={os.environ.get('WEB_CONCURRENCY')}")
     _log(
         "MODEL_CONFIG="
@@ -970,4 +1026,8 @@ if __name__ == "__main__":
     )
     os.environ.pop("WEB_CONCURRENCY", None)
     os.environ.pop("UVICORN_WORKERS", None)
-    uvicorn.run(app, host="127.0.0.1", port=SERVICE_PORT, workers=1, reload=False)
+    try:
+        uvicorn.run(app, host="127.0.0.1", port=SERVICE_PORT, workers=1, reload=False)
+    except Exception as exc:
+        _log(f"SERVICE_CRASH error={exc}")
+        raise
