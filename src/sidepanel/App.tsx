@@ -4,6 +4,8 @@ import ConfirmModal from './ConfirmModal'
 import {
   ArrowClockwise,
   CheckCircle,
+  ClockCounterClockwise,
+  Activity,
   CloudArrowDown,
   Copy,
   Download,
@@ -12,6 +14,9 @@ import {
   Clock,
   Globe,
   Lightbulb,
+  Link,
+  Stack,      // Replaced Layers
+  CircleNotch,// Replaced Loader
   MagnifyingGlass,
   PauseCircle,
   PlayCircle,
@@ -35,7 +40,7 @@ const SERVICE_ERROR_KEYS: Record<string, string> = {
   connection_refused: 'errors.connectionRefused',
 }
 
-type TaskStatus = 'queued' | 'downloading' | 'transcribing' | 'done' | 'error' | 'canceled'
+type TaskStatus = 'queued' | 'downloading' | 'transcribing' | 'canceling' | 'done' | 'error' | 'canceled'
 
 interface TaskItem {
   id: string
@@ -52,6 +57,10 @@ interface TaskItem {
   resultFilename?: string
   queuePosition?: number | null
 }
+
+type TaskView = TaskItem & { displayStatus: TaskStatus }
+
+const IN_PROGRESS_STATUSES: TaskStatus[] = ['queued', 'downloading', 'transcribing', 'canceling']
 
 interface TasksSnapshot {
   tasks: TaskItem[]
@@ -109,6 +118,7 @@ const App: React.FC = () => {
   const [overlayVisible, setOverlayVisible] = useState(true)
   const [overlayHiding, setOverlayHiding] = useState(false)
   const [tasks, setTasks] = useState<TaskItem[]>([])
+  const [optimisticCanceledIds, setOptimisticCanceledIds] = useState<Set<string>>(() => new Set())
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null)
   const [isAdding, setIsAdding] = useState(false)
   const [sseStatus, setSseStatus] = useState<'connecting' | 'connected' | 'error'>('connecting')
@@ -143,6 +153,7 @@ const App: React.FC = () => {
   const [tourBubblePos, setTourBubblePos] = useState({ top: 0, left: 0 })
   const [tourRect, setTourRect] = useState({ top: 0, left: 0, width: 0, height: 0 })
   const [autoConnectEnabled, setAutoConnectEnabled] = useState(true)
+  const [animateActiveCount, setAnimateActiveCount] = useState(false)
   const [confirmModalConfig, setConfirmModalConfig] = useState<{
     isOpen: boolean
     title: string
@@ -164,7 +175,7 @@ const App: React.FC = () => {
   const toastTimersRef = useRef<Map<string, number[]>>(new Map())
   const ensureInFlightRef = useRef<Promise<{ port: number; token: string }> | null>(null)
   const mainRef = useRef<HTMLElement | null>(null)
-  const serviceBadgeRef = useRef<HTMLButtonElement | null>(null)
+  const serviceBadgeRef = useRef<HTMLDivElement | null>(null)
   const createButtonRef = useRef<HTMLButtonElement | null>(null)
   const listAreaRef = useRef<HTMLDivElement | null>(null)
   const clearQueueRef = useRef<HTMLButtonElement | null>(null)
@@ -184,33 +195,46 @@ const App: React.FC = () => {
     [t]
   )
 
+  const tasksWithDisplay = useMemo<TaskView[]>(() => {
+    if (optimisticCanceledIds.size === 0) {
+      return tasks.map((task) => ({ ...task, displayStatus: task.status }))
+    }
+    return tasks.map((task) => {
+      const shouldOverride =
+        optimisticCanceledIds.has(task.id) && IN_PROGRESS_STATUSES.includes(task.status)
+      return { ...task, displayStatus: shouldOverride ? 'canceled' : task.status }
+    })
+  }, [tasks, optimisticCanceledIds])
+
   const taskStats = useMemo(() => {
-    const inProgress = tasks.filter((task) =>
-      ['queued', 'downloading', 'transcribing'].includes(task.status)
+    const inProgress = tasksWithDisplay.filter((task) =>
+      IN_PROGRESS_STATUSES.includes(task.displayStatus)
     ).length
-    const done = tasks.filter((task) =>
-      ['done', 'canceled', 'error'].includes(task.status)
+    const done = tasksWithDisplay.filter((task) =>
+      ['done', 'canceled', 'error'].includes(task.displayStatus)
     ).length
     return { inProgress, done }
-  }, [tasks])
+  }, [tasksWithDisplay])
 
   const filteredTasks = useMemo(() => {
     if (filter === 'active') {
-      return tasks.filter((task) =>
-        ['queued', 'downloading', 'transcribing'].includes(task.status)
+      return tasksWithDisplay.filter((task) =>
+        IN_PROGRESS_STATUSES.includes(task.displayStatus)
       )
     }
     if (filter === 'done') {
-      const completed = tasks.filter((task) => ['done', 'canceled', 'error'].includes(task.status))
+      const completed = tasksWithDisplay.filter((task) =>
+        ['done', 'canceled', 'error'].includes(task.displayStatus)
+      )
       completed.sort((a, b) => b.createdAt - a.createdAt)
       return completed
     }
-    const active = tasks.filter((task) =>
-      ['queued', 'downloading', 'transcribing'].includes(task.status)
+    const active = tasksWithDisplay.filter((task) =>
+      IN_PROGRESS_STATUSES.includes(task.displayStatus)
     )
     active.sort((a, b) => b.createdAt - a.createdAt)
     return active
-  }, [tasks, filter])
+  }, [tasksWithDisplay, filter])
 
   const visibleTasks = useMemo(
     () => filteredTasks.slice(0, visibleCount),
@@ -225,6 +249,24 @@ const App: React.FC = () => {
   useEffect(() => {
     progressRef.current = progressValue
   }, [progressValue])
+
+  useEffect(() => {
+    if (optimisticCanceledIds.size === 0) return
+    setOptimisticCanceledIds((prev) => {
+      if (prev.size === 0) return prev
+      const next = new Set(prev)
+      let changed = false
+      const tasksById = new Map(tasks.map((task) => [task.id, task]))
+      for (const id of prev) {
+        const task = tasksById.get(id)
+        if (!task || ['done', 'error', 'canceled'].includes(task.status)) {
+          next.delete(id)
+          changed = true
+        }
+      }
+      return changed ? next : prev
+    })
+  }, [tasks, optimisticCanceledIds.size])
 
   useEffect(() => {
     const from = progressRef.current
@@ -253,6 +295,14 @@ const App: React.FC = () => {
       // ignore
     }
   }, [tourMode])
+
+  useEffect(() => {
+    if (taskStats.inProgress > 0) {
+      setAnimateActiveCount(true)
+      const timer = setTimeout(() => setAnimateActiveCount(false), 400)
+      return () => clearTimeout(timer)
+    }
+  }, [taskStats.inProgress])
 
   useEffect(() => {
     if (!tourMode) return
@@ -663,23 +713,35 @@ const App: React.FC = () => {
       return
     }
     const poll = async () => {
-      const data = await fetchServiceStatus()
-      if (data?.modelReady) {
-        if (statusPollRef.current) {
-          window.clearInterval(statusPollRef.current)
-          statusPollRef.current = null
+      try {
+        const data = await fetchServiceStatus()
+        if (!data) {
+          // fetchServiceStatus 内部 catch 了并返回 null，说明服务通信失败
+          throw new Error('heartbeat_failed')
+        }
+        if (data.modelReady) {
+          if (statusPollRef.current && (serviceStatus !== 'starting' && modelLoading !== true)) {
+            // 如果模型已就绪且不在启动/加载中，可以降低频率，但不再完全停止，以保持心跳
+          }
+        }
+      } catch (error) {
+        console.error('Heartbeat failed:', error)
+        if (autoConnectEnabled) {
+          // 尝试静默重连
+          ensureService(false).catch(() => undefined)
+        } else {
+          setServiceStatus('error')
+          setServiceError('service_unavailable')
         }
       }
     }
-    const shouldPoll = serviceStatus === 'starting' || modelLoading === true
-    if (!shouldPoll) {
-      if (modelCached === null) {
-        poll()
-      }
-      return
-    }
+    const shouldPoll = serviceStatus === 'ready' || serviceStatus === 'starting' || modelLoading === true
+    if (!shouldPoll) return
+    
+    // 如果是 ready 状态，心跳频率设为 10s；如果是 starting 状态，设为 2s 用于快速感知
+    const interval = serviceStatus === 'ready' ? 10000 : 2000
     poll()
-    statusPollRef.current = window.setInterval(poll, 10000)
+    statusPollRef.current = window.setInterval(poll, interval)
     return () => {
       if (statusPollRef.current) {
         window.clearInterval(statusPollRef.current)
@@ -742,14 +804,14 @@ const App: React.FC = () => {
   }, [serviceStatus, modelCached])
 
   useEffect(() => {
-    const inProgress = tasks.filter((task) =>
-      ['queued', 'downloading', 'transcribing'].includes(task.status)
+    const inProgress = tasksWithDisplay.filter((task) =>
+      IN_PROGRESS_STATUSES.includes(task.displayStatus)
     ).length
     if (!chrome?.action?.setBadgeText) return
     const badgeText = inProgress > 99 ? '99+' : inProgress ? String(inProgress) : ''
     chrome.action.setBadgeText({ text: badgeText })
     chrome.action.setBadgeBackgroundColor({ color: '#4F46E5' })
-  }, [tasks])
+  }, [tasksWithDisplay])
 
   const getActiveTab = () => {
     return new Promise<chrome.tabs.Tab>((resolve, reject) => {
@@ -880,6 +942,7 @@ const App: React.FC = () => {
         method: 'POST',
         body: JSON.stringify(payload),
       })
+      setFilter('active') // 成功创建后立马切换到进行中标签页
       await refreshTasks()
     } catch (error: any) {
       showToast('error', error.message || t('errors.addTaskFailed'))
@@ -904,11 +967,22 @@ const App: React.FC = () => {
 
   const confirmCancel = async (task: TaskItem) => {
     if (guardTourAction()) return
+    setOptimisticCanceledIds((prev) => {
+      const next = new Set(prev)
+      next.add(task.id)
+      return next
+    })
     try {
       await apiFetch(`/api/tasks/${task.id}/cancel`, { method: 'POST' })
       await refreshTasks()
       showToast('info', t('task.canceled'))
     } catch (error: any) {
+      setOptimisticCanceledIds((prev) => {
+        if (!prev.has(task.id)) return prev
+        const next = new Set(prev)
+        next.delete(task.id)
+        return next
+      })
       showToast('error', error.message || t('errors.cancelTaskFailed'))
     }
   }
@@ -932,12 +1006,20 @@ const App: React.FC = () => {
 
   const handleDelete = async (task: TaskItem) => {
     if (guardTourAction()) return
-    try {
-      await apiFetch(`/api/tasks/${task.id}`, { method: 'DELETE' })
-      await refreshTasks()
-    } catch (error: any) {
-      showToast('error', error.message || t('errors.deleteFailed'))
-    }
+    setConfirmModalConfig({
+      isOpen: true,
+      title: t('modal.deleteTask.title'),
+      message: t('modal.deleteTask.message'),
+      variant: 'danger',
+      onConfirm: async () => {
+        try {
+          await apiFetch(`/api/tasks/${task.id}`, { method: 'DELETE' })
+          await refreshTasks()
+        } catch (error: any) {
+          showToast('error', error.message || t('errors.deleteFailed'))
+        }
+      },
+    })
   }
 
   const handleClearQueue = async () => {
@@ -1167,6 +1249,8 @@ const App: React.FC = () => {
         return 'text-emerald-600 bg-emerald-50 border-emerald-100'
       case 'error':
         return 'text-rose-600 bg-rose-50 border-rose-100'
+      case 'canceling':
+        return 'text-amber-600 bg-amber-50 border-amber-100'
       case 'canceled':
         return 'text-slate-500 bg-slate-100 border-slate-200'
       case 'downloading':
@@ -1188,64 +1272,63 @@ const App: React.FC = () => {
         <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-violet-200/50 rounded-full blur-[80px]" />
       </div>
 
-      <header className="px-6 py-5 bg-white/70 backdrop-blur-xl border-b border-white/40 flex items-center justify-between sticky top-0 z-20">
+      <header className="px-6 py-6 bg-white/80 backdrop-blur-xl border-b border-white/40 flex items-center justify-between sticky top-0 z-20">
         <div>
-          <h1 className="text-base font-extrabold tracking-tight text-slate-800">{t('app.title')}</h1>
-          <p className="text-[11px] text-indigo-500 font-black tracking-widest uppercase">{t('app.subtitle')}</p>
+          <div className="flex items-center gap-3">
+            <h1 className="text-3xl font-black tracking-tight text-slate-900">{t('app.title')}</h1>
+            {/* Live Indicator implementing original service logic visually */}
+            <div 
+              ref={serviceBadgeRef}
+              className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold tracking-wide transition-all cursor-pointer select-none ${
+                serviceStatus === 'ready' 
+                  ? 'bg-emerald-100 text-emerald-700' 
+                  : serviceStatus === 'error'
+                  ? 'bg-rose-100 text-rose-700'
+                  : 'bg-slate-100 text-slate-500'
+              }`}
+              onClick={
+                serviceStatus === 'ready' 
+                  ? handleStopService 
+                  : () => ensureService()
+              }
+              title={serviceStatus === 'ready' ? t('service.stop') : t('service.connecting')}
+            >
+              <div className="relative flex h-2 w-2">
+                {serviceStatus === 'ready' && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75"></span>}
+                <span className={`relative inline-flex rounded-full h-2 w-2 ${
+                  serviceStatus === 'ready' 
+                    ? 'bg-emerald-600' 
+                    : serviceStatus === 'error'
+                    ? 'bg-rose-500' 
+                    : 'bg-slate-400'
+                }`}></span>
+              </div>
+              <span>
+                {serviceStatus === 'ready' ? 'LIVE' : serviceStatus === 'error' ? 'OFFLINE' : 'CONNECTING...'}
+              </span>
+            </div>
+          </div>
+          <p className="text-sm font-medium text-slate-500 mt-1">{t('app.subtitle')}</p>
         </div>
-        <div className="flex items-center gap-2">
+
+        <div className="flex items-center gap-1">
           <button
             onClick={() => {
               const newLang = i18n.language === 'zh' ? 'en' : 'zh'
               i18n.changeLanguage(newLang)
             }}
-            className="rounded-full border border-slate-200 px-3 py-1 text-[10px] font-bold text-slate-600 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-sm hover:text-slate-800 hover:border-slate-300"
-            title={t('language.' + (i18n.language === 'zh' ? 'en' : 'zh'))}
+            className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-500 rounded-lg hover:bg-slate-200/50 hover:text-slate-800 transition-all"
           >
-            <Globe size={12} className="inline mr-1" />
-            {i18n.language === 'zh' ? 'EN' : '中文'}
+            <Globe size={14} />
+            <span>{i18n.language === 'zh' ? 'EN' : '中文'}</span>
           </button>
+          
           <button
             onClick={startTour}
-            className="rounded-full border border-indigo-100 px-3 py-1 text-[10px] font-bold text-indigo-500 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-sm hover:text-indigo-600"
+            className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-500 rounded-lg hover:bg-slate-200/50 hover:text-slate-800 transition-all"
           >
-            {t('tour.guide')}
-          </button>
-          <button
-            ref={serviceBadgeRef}
-            onClick={
-              serviceStatus === 'ready'
-                ? handleStopService
-                : serviceStatus === 'error'
-                  ? handleReconnect
-                  : undefined
-            }
-            disabled={serviceStatus === 'connecting' || serviceStatus === 'starting'}
-            className={`inline-flex items-center gap-1 rounded-2xl px-3 py-1.5 text-[10px] font-black tracking-wider shadow-sm border transition-all duration-200 ${
-              serviceStatus === 'ready'
-                ? 'service-button-ready bg-white text-emerald-600 border-emerald-100 min-w-[100px] justify-center'
-                : serviceStatus === 'connecting' || serviceStatus === 'starting'
-                ? 'bg-white text-indigo-500 border-indigo-100'
-                : 'bg-white text-rose-500 border-rose-100 hover:-translate-y-0.5 hover:shadow-sm'
-            }`}
-          >
-            {serviceStatus === 'ready' && <Power size={12} />}
-            {serviceStatus === 'error'
-              ? t('service.notConnected')
-              : serviceStatus === 'idle' || serviceStatus === 'connecting'
-              ? t('service.connecting')
-              : serviceStatus === 'starting'
-              ? modelLoading === true
-                ? t('service.modelLoading')
-                : t('service.starting')
-              : modelLoading === true
-              ? t('service.modelLoading')
-              : (
-                <>
-                  <span className="button-text-default">{t('service.connected')}</span>
-                  <span className="button-text-hover">{t('service.stop')}</span>
-                </>
-              )}
+            <Lightbulb size={14} />
+            <span>{t('tour.guide')}</span>
           </button>
         </div>
       </header>
@@ -1391,54 +1474,59 @@ const App: React.FC = () => {
             onClick={handleAddTask}
             disabled={serviceStatus !== 'ready' || isAdding}
             ref={createButtonRef}
-            className="flex items-center gap-2 rounded-2xl bg-indigo-600 px-4 py-2 text-white text-sm font-bold shadow-lg shadow-indigo-600/20 disabled:opacity-50 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-indigo-600/40"
+            className="group flex items-center gap-2 rounded-2xl bg-blue-600 px-5 py-2.5 text-white text-sm font-bold shadow-lg shadow-blue-200 disabled:opacity-50 transition-all duration-300 hover:scale-105 hover:bg-blue-700 active:scale-95"
           >
-            {isAdding ? <ArrowClockwise size={16} className="animate-spin" /> : <Plus size={16} />}
+            {isAdding ? <ArrowClockwise size={16} className="animate-spin" /> : <Plus size={18} className="transition-transform duration-300 group-hover:rotate-90" />}
             {t('task.create')}
           </button>
           <button
             onClick={handleClearQueue}
             ref={clearQueueRef}
-            className="text-xs font-bold text-slate-500 transition-all duration-200 hover:text-slate-700 hover:-translate-y-0.5"
+            className="hidden" // Hiding original Clear Queue button to move it to section header
           >
             {t('task.clearQueue')}
           </button>
         </div>
 
-        <div className="rounded-[18px] bg-[#F5F7FA] px-2 py-2">
-          <div className="flex items-stretch text-xs font-semibold">
+        <div className="rounded-2xl bg-slate-200/50 p-1 mb-6">
+          <div className="flex items-stretch text-xs font-semibold relative">
           {(
             [
               { key: 'active', label: t('task.inProgress'), value: taskStats.inProgress },
               { key: 'done', label: t('task.completed'), value: taskStats.done },
             ] as const
-          ).map((item, index, arr) => (
-            <React.Fragment key={item.key}>
-              <button
-                onClick={() => setFilter(item.key)}
-                className={`flex-1 rounded-[14px] px-2 py-2 text-[11px] transition-all duration-200 ${
-                  filter === item.key
-                    ? 'bg-white text-slate-900 shadow-sm'
-                    : 'text-slate-500 hover:bg-white/70 hover:text-slate-700'
-                }`}
-              >
-                <div className="text-[11px] font-semibold text-slate-800">
-                  {item.label}
-                  <span className="text-slate-400">({item.value})</span>
-                </div>
-              </button>
-              {index < arr.length - 1 && (
-                <div className="flex items-center">
-                  <div className="h-[60%] w-px bg-slate-200/70" />
-                </div>
-              )}
-            </React.Fragment>
+          ).map((item) => (
+            <button
+              key={item.key}
+              onClick={() => setFilter(item.key)}
+              className={`flex-1 rounded-xl py-2 text-sm font-bold transition-all duration-300 relative z-10 ${
+                filter === item.key
+                  ? `bg-white shadow-md scale-[1.02] ${item.key === 'active' ? 'text-blue-600' : 'text-emerald-600'}`
+                  : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              <div className="flex items-center justify-center gap-2">
+                {item.key === 'active' ? (
+                  <Activity size={16} weight={filter === item.key ? 'fill' : 'bold'} className={filter === item.key ? 'text-blue-600' : 'text-slate-400'} />
+                ) : (
+                  <ClockCounterClockwise size={16} weight={filter === item.key ? 'fill' : 'bold'} className={filter === item.key ? 'text-emerald-500' : 'text-slate-400'} />
+                )}
+                <span>{item.label}</span>
+                <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                   filter === item.key 
+                     ? (item.key === 'active' ? 'bg-blue-600 text-white' : 'bg-emerald-500 text-white')
+                     : 'bg-slate-300/50 text-slate-600'
+                } ${item.key === 'active' && animateActiveCount ? 'animate-badge-bounce' : ''}`}>
+                  {item.value}
+                </span>
+              </div>
+            </button>
           ))}
           </div>
         </div>
 
 
-        <div ref={listAreaRef} className="space-y-4 pb-6">
+        <div key={filter} ref={listAreaRef} className="space-y-4 pb-6 animate-slide-in-up">
           {serviceStatus === 'ready' && !hasSnapshot && (
             <>
               {Array.from({ length: 3 }).map((_, index) => (
@@ -1458,6 +1546,21 @@ const App: React.FC = () => {
               ))}
             </>
           )}
+          
+          {/* Section Header & Global Actions for Active List */}
+          {filter === 'active' && hasSnapshot && filteredTasks.length > 0 && (
+             <div className="flex items-center justify-between px-2 mb-2 animate-slide-in-up" style={{ animationDelay: '0.1s' }}>
+                <h2 className="text-xs font-black uppercase tracking-widest text-slate-400">
+                  IN PROGRESS
+                </h2>
+                <button
+                  onClick={handleClearQueue}
+                  className="rounded-full bg-white/40 backdrop-blur-sm border border-slate-200/50 px-3 py-1 text-[11px] font-bold text-slate-500 hover:text-red-500 transition-colors"
+                >
+                  {t('task.clearQueue')}
+                </button>
+             </div>
+          )}
           {serviceStatus === 'ready' && hasSnapshot && filteredTasks.length === 0 && (
             <div className="rounded-3xl border border-white bg-white/70 p-8 text-center text-slate-400 text-sm">
               {t('task.noTasks')}
@@ -1466,138 +1569,229 @@ const App: React.FC = () => {
           {serviceStatus === 'ready' &&
             hasSnapshot &&
             visibleTasks.map((task, index) => {
-            const isActive =
-              task.status === 'queued' ||
-              task.status === 'downloading' ||
-              task.status === 'transcribing'
+            const displayStatus = task.displayStatus
+            const isCanceling = displayStatus === 'canceling'
+            const isActive = IN_PROGRESS_STATUSES.includes(displayStatus)
             const isCurrent =
-              activeTaskId === task.id ||
-              (!activeTaskId && (task.status === 'downloading' || task.status === 'transcribing'))
-            const isWaiting = task.status === 'queued' && !isCurrent
+              isActive &&
+              (activeTaskId === task.id ||
+                (!activeTaskId &&
+                  (displayStatus === 'downloading' || displayStatus === 'transcribing')))
+            const isWaiting = displayStatus === 'queued' && !isCurrent
             const downloadDone = task.downloadProgress >= 100
             const transcribeDone = task.transcribeProgress >= 100
             return (
               <div
                 key={`${task.id}-${animateKey}`}
-                className={`task-card list-entry group relative rounded-3xl border border-white bg-white/80 p-5 shadow-sm ${
-                  isCurrent ? 'ring-2 ring-indigo-200 shadow-md' : ''
-                } ${isWaiting ? 'opacity-60' : ''}`}
+                className={`task-card list-entry group relative transition-all duration-300 ${
+                  isActive 
+                    ? 'rounded-3xl border border-blue-200 bg-white p-5 shadow-md shadow-blue-500/10 ring-1 ring-blue-50' 
+                    : `flex items-center gap-4 rounded-3xl border border-white bg-white/80 p-5 shadow-sm hover:shadow-md hover:border-indigo-100 ${
+                        displayStatus === 'canceled' ? 'opacity-70 grayscale-[0.5]' : ''
+                      }`
+                } ${isWaiting ? '!border-dashed !border-slate-200 !bg-slate-50/50 !opacity-80 hover:!opacity-100 !shadow-none' : ''}`}
                 style={{ animationDelay: `${0.05 + index * 0.07}s` }}
               >
-                {isActive && (
-                  <button
-                    onClick={() => handleCancel(task)}
-                    className="absolute top-3 right-3 p-2 z-30 text-slate-300 opacity-100 sm:opacity-0 group-hover:opacity-100 group-hover:text-rose-500 hover:bg-rose-50 rounded-full transition-all duration-300 hover:scale-110"
-                    title={t('modal.cancelTask.title')}
-                  >
-                    <Trash size={16} />
-                  </button>
-                )}
+                {isActive ? (
+                  /* 进行中任务：新版设计 (Running/Queued Task: New Design) */
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start gap-3">
+                      {/* Icon Slot */}
+                      <div className={`relative shrink-0 w-10 h-10 rounded-2xl flex items-center justify-center ${
+                        isWaiting
+                          ? 'bg-slate-100 text-slate-400'
+                          : isCanceling
+                          ? 'bg-amber-50 text-amber-500'
+                          : 'bg-blue-50 text-blue-500'
+                      }`}>
+                         {isWaiting ? (
+                           <Clock size={20} weight="bold" />
+                         ) : (
+                           <>
+                             <CircleNotch
+                               size={20}
+                               className={`animate-spin ${isCanceling ? 'text-amber-500' : 'text-blue-600'}`}
+                               weight="bold"
+                             />
+                             {!isCanceling && (
+                               <span className="absolute top-1 right-1 flex h-2 w-2">
+                                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                                 <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500 animate-pulse"></span>
+                               </span>
+                             )}
+                           </>
+                         )}
+                      </div>
 
+                      {/* Content */}
+                      <div className="flex-1 min-w-0">
+                         {/* Header & Badge */}
+                         <div className="flex items-center justify-between mb-1">
+                           <div className="flex items-center gap-2">
+                             <div className={`text-[10px] font-black px-1.5 py-0.5 rounded uppercase tracking-wider ${
+                               isWaiting
+                                 ? 'bg-slate-200 text-slate-600'
+                                 : isCanceling
+                                 ? 'bg-amber-500 text-white'
+                                 : 'bg-blue-600 text-white'
+                             }`}>
+                               {isWaiting
+                                 ? t('task.waitN', { n: task.queuePosition || 1 })
+                                 : isCanceling
+                                 ? t('task.status.canceling')
+                                 : 'RUNNING'}
+                             </div>
+                           </div>
+                           
+                           {/* Action Floating Bar */}
+                           <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all duration-300">
+                              <button
+                                onClick={() => handleCancel(task)}
+                                className={`p-1.5 rounded-lg transition-all ${
+                                  isCanceling
+                                    ? 'text-slate-300 cursor-not-allowed'
+                                    : 'text-slate-300 hover:text-rose-500 hover:bg-rose-50'
+                                }`}
+                                title={t('modal.cancelTask.title')}
+                                disabled={isCanceling}
+                              >
+                                <Trash size={16} />
+                              </button>
+                           </div>
+                         </div>
 
-                <div className="min-w-0 pr-12">
-                  <p className="text-sm font-semibold text-slate-800 leading-snug break-words">
-                    {task.title || task.url}
-                  </p>
-                  <p className="text-[11px] text-slate-400 mt-1 break-all">{task.url}</p>
-                </div>
+                         {/* Title & Link */}
+                         <h3 className="text-sm font-bold text-slate-800 wrap-break-word leading-snug mb-1">
+                           {task.title || task.url}
+                         </h3>
+                         <div className="flex items-center gap-1.5 text-[11px] text-slate-400 mb-3">
+                           <Link size={14} className={isWaiting ? 'text-slate-400' : 'text-blue-400'} />
+                           <span className="truncate max-w-[200px]">{task.url}</span>
+                         </div>
 
-                <div className="mt-4 space-y-3">
-                  <div>
-                    <div className="flex items-center justify-between text-xs text-slate-500">
-                      <span className="inline-flex items-center gap-1">
-                        {downloadDone ? (
-                          <CheckCircle size={12} className="text-emerald-500" />
-                        ) : (
-                          <ArrowClockwise size={12} className="animate-spin text-indigo-500" />
+                         {/* Progress / Metadata */}
+                         {isWaiting ? (
+                           <div className="flex items-center gap-3 text-[10px] font-bold text-slate-400 bg-slate-100/50 rounded-lg px-2 py-1.5">
+                             <div className="flex items-center gap-1">
+                               <Clock size={14} weight="fill" className="text-slate-300" />
+                               <span>{t('task.estimatedWait', { n: (task.queuePosition || 1) * 2 })}</span>
+                             </div>
+                           </div>
+                         ) : isCanceling ? (
+                           <div className="flex items-center gap-2 text-[11px] font-bold text-amber-600">
+                             <CircleNotch size={14} className="animate-spin" />
+                             {t('task.status.canceling')}
+                           </div>
+                         ) : (
+                           <div className="space-y-1.5">
+                             <div className="flex justify-between text-[11px] font-bold">
+                               <span className="text-blue-600">
+                                 {displayStatus === 'downloading' ? t('task.status.downloading') : t('task.processing')}
+                               </span>
+                               <span className="text-blue-600">
+                                 {displayStatus === 'downloading' ? task.downloadProgress : task.transcribeProgress}%
+                               </span>
+                             </div>
+                             <div className="h-1.5 w-full bg-blue-50 rounded-full overflow-hidden">
+                               <div
+                                 className="h-full bg-blue-500 rounded-full transition-all duration-700 ease-out"
+                                 style={{ width: `${displayStatus === 'downloading' ? task.downloadProgress : task.transcribeProgress}%` }}
+                               />
+                             </div>
+                           </div>
+                         )}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  /* 已完成/已取消任务：三段式布局 (Completed/Canceled Task: Three-section layout) */
+                  <>
+                    {/* Left: Status Indicator */}
+                    <div className={`shrink-0 w-10 h-10 rounded-full flex items-center justify-center ${
+                      displayStatus === 'done' ? 'bg-emerald-50 text-emerald-500' : 'bg-slate-100 text-slate-400'
+                    }`}>
+                      {displayStatus === 'done' ? <CheckCircle size={22} weight="fill" /> : <XCircle size={22} weight="fill" />}
+                    </div>
+
+                    {/* Middle: Main Content Body */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start gap-2 mb-1">
+                        <h3 className={`text-sm font-bold wrap-break-word leading-snug ${
+                          displayStatus === 'done' ? 'text-slate-900 font-extrabold' : 'text-slate-800'
+                        } ${displayStatus === 'canceled' ? 'line-through text-slate-400' : ''}`}>
+                          {task.title || task.url}
+                        </h3>
+                      </div>
+
+                      <a
+                        href={task.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className={`flex items-center gap-1 text-[11px] text-indigo-400 hover:text-indigo-600 hover:underline transition-colors mb-1 ${
+                          displayStatus === 'canceled' ? 'pointer-events-none opacity-50' : ''
+                        }`}
+                      >
+                        <Link size={32} />
+                        <span className="truncate">{task.url}</span>
+                      </a>
+
+                      <div className="flex items-center gap-3 text-[10px] text-slate-400 font-medium">
+                        <span className="flex items-center gap-1">
+                          <Clock size={12} />
+                          {new Date(task.updatedAt).toLocaleString(undefined, {
+                            month: 'numeric',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })}
+                        </span>
+                        {displayStatus === 'done' && (
+                          <span className="text-emerald-500/80 font-bold">{t('task.status.done')}</span>
                         )}
-                        {t('task.downloadProgress')}
-                      </span>
-                      <span>{task.downloadProgress}%</span>
-                    </div>
-                    <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-indigo-500 rounded-full transition-all"
-                        style={{ width: `${task.downloadProgress}%` }}
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <div className="flex items-center justify-between text-xs text-slate-500">
-                      <span className="inline-flex items-center gap-1">
-                      {transcribeDone ? (
-                        <CheckCircle size={12} className="text-emerald-500" />
-                      ) : task.status === 'transcribing' ? (
-                        <ArrowClockwise size={12} className="animate-spin text-amber-500" />
-                      ) : (
-                        <Clock size={12} className="text-slate-400" />
+                        {displayStatus === 'canceled' && (
+                          <span className="text-slate-400 font-bold">{t('task.status.canceled')}</span>
+                        )}
+                      </div>
+
+                      {displayStatus === 'error' && (
+                        <div className="mt-2 text-[10px] text-rose-500 font-bold italic">
+                          {(task.errorMessage === "服务重启导致任务中断，请重试" ? "任务已取消，请重试" : task.errorMessage) || t('task.failed')}
+                        </div>
                       )}
-                        {t('task.transcribeProgress')}
-                      </span>
-                    <span>{task.transcribeProgress}%</span>
-                  </div>
-                  <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-amber-500 rounded-full transition-all"
-                      style={{ width: `${task.transcribeProgress}%` }}
-                    />
-                  </div>
-                  </div>
-                </div>
-
-                {task.status === 'queued' && task.queuePosition != null && (
-                  <div className="mt-3 flex items-center gap-2 text-xs text-slate-400">
-                    <Clock size={12} />
-                    {t('task.queuePosition')}: {task.queuePosition}
-                  </div>
-                )}
-
-                {task.status === 'error' && (
-                  <div className="mt-3 text-xs text-rose-500">
-                    {task.errorMessage || t('task.failed')}
-                  </div>
-                )}
-
-                <div className="mt-4 flex flex-wrap gap-2">
-                  {(task.status === 'error' || task.status === 'canceled') && (
-                    <button
-                      onClick={() => handleRetry(task)}
-                      className="inline-flex items-center gap-1 rounded-full border border-indigo-200 px-3 py-1 text-xs font-bold text-indigo-600 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-sm hover:border-indigo-300"
-                    >
-                      <ArrowClockwise size={12} />
-                      {t('task.retry')}
-                    </button>
-                  )}
-
-                  {task.status === 'done' && (
-                    <button
-                      onClick={() => handleDownload(task)}
-                      className="inline-flex items-center gap-1 rounded-full border border-emerald-200 px-3 py-1 text-xs font-bold text-emerald-600 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-sm hover:border-emerald-300"
-                    >
-                      <DownloadSimple size={12} />
-                      {t('task.downloadTxt')}
-                    </button>
-                  )}
-
-                  {(task.status === 'done' ||
-                    task.status === 'error' ||
-                    task.status === 'canceled') && (
-                    <button
-                      onClick={() => handleDelete(task)}
-                      className="inline-flex items-center gap-1 rounded-full border border-rose-200 px-3 py-1 text-xs font-bold text-rose-500 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-sm hover:border-rose-300"
-                    >
-                      <Trash size={12} />
-                      {t('task.delete')}
-                    </button>
-                  )}
-
-                  {task.status === 'done' && (
-                    <div className="inline-flex items-center gap-1 text-xs text-emerald-500">
-                      <CheckCircle size={12} />
-                      {t('task.status.done')}
                     </div>
-                  )}
-                </div>
+
+                    {/* Right: Action Floating Bar */}
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all duration-300">
+                      <div className="flex gap-1">
+                        {displayStatus === 'error' && (
+                          <button
+                            onClick={() => handleRetry(task)}
+                            className="p-2 text-indigo-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all hover:scale-110"
+                            title={t('task.retry')}
+                          >
+                            <ArrowClockwise size={18} weight="bold" />
+                          </button>
+                        )}
+                        {displayStatus === 'done' && (
+                          <button
+                            onClick={() => handleDownload(task)}
+                            className="p-2 text-emerald-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl transition-all hover:scale-110"
+                            title={t('task.downloadTxt')}
+                          >
+                            <DownloadSimple size={18} weight="bold" />
+                          </button>
+                        )}
+                        <button
+                          onClick={() => handleDelete(task)}
+                          className="p-2 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-all hover:scale-110"
+                          title={t('task.delete')}
+                        >
+                          <Trash size={18} />
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
             )
           })}
