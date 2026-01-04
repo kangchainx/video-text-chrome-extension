@@ -125,8 +125,26 @@ function startService(token) {
   childProcess = spawn(command, args, {
     env,
     detached: true,
-    stdio: 'ignore',
+    stdio: ['ignore', 'ignore', 'pipe'], // 捕获 stderr
   });
+
+  if (childProcess.stderr) {
+    childProcess.stderr.on('data', (data) => {
+      const msg = data.toString();
+      // 将 Python 的错误流直接写入 native log，方便排查崩溃
+      log(`[service-stderr] ${msg.trim()}`);
+    });
+  }
+
+  childProcess.on('exit', (code, signal) => {
+    log(`[host] service_exit code=${code} signal=${signal}`);
+    childProcess = null;
+  });
+
+  childProcess.on('error', (err) => {
+    log(`[host] service_spawn_error ${err.message}`);
+  });
+
   childProcess.unref();
   lastStartAt = Date.now();
 }
