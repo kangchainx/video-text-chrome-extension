@@ -97,6 +97,12 @@ This project uses a hybrid architecture to combine the convenience of a browser 
 -   **Permission Denied**: Run `chmod +x` on all scripts in `native-host/`.
 -   **Download Error**: Integrating cookies for Bilibili 1080p requires the extension to read cookies for `.bilibili.com`.
 
+## Roadmap
+
+- [ ] **Cloud Transcription Service**: Optional server-side processing for faster transcription and higher model quality (may involve fees).
+- [ ] **Batch Processing**: Support for transcribing multiple videos at once.
+- [ ] **Custom Model Selection**: Allow users to choose between different Whisper model sizes (base/small/medium).
+
 ## Contributing
 
 Pull requests are welcome! Please make sure to update tests as appropriate.

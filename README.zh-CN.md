@@ -97,6 +97,12 @@ python mini_transcriber.py
 -   **Permission Denied**：对 `native-host/` 目录下的所有脚本运行 `chmod +x`。
 -   **下载错误**：如果是 Bilibili 1080p 视频，需要扩展具备读取 `.bilibili.com` Cookie 的权限。
 
+## 后续计划
+
+- [ ] **云端转录服务**：增加可选的服务器端处理，提供更快的转写速度和更高质量的模型（可能收取一定费用）。
+- [ ] **批量处理**：支持一次处理多个视频任务。
+- [ ] **自定义模型选择**：允许用户在不同的 Whisper 模型大小（base/small/medium）之间进行选择。
+
 ## 贡献
 
 欢迎提交 Pull Request！请确保更新相应的测试。
