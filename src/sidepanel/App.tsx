@@ -18,6 +18,7 @@ import {
   Stack,      // Replaced Layers
   CircleNotch,// Replaced Loader
   MagnifyingGlass,
+  Megaphone,
   PauseCircle,
   PlayCircle,
   Plus,
@@ -60,7 +61,7 @@ interface TaskItem {
 
 type TaskView = TaskItem & { displayStatus: TaskStatus }
 
-const IN_PROGRESS_STATUSES: TaskStatus[] = ['queued', 'downloading', 'transcribing', 'canceling']
+const IN_PROGRESS_STATUSES: TaskStatus[] = ['queued', 'downloading', 'transcribing']
 
 interface TasksSnapshot {
   tasks: TaskItem[]
@@ -190,7 +191,6 @@ const App: React.FC = () => {
       { key: 'status', title: t('tour.steps.status.title'), content: t('tour.steps.status.content') },
       { key: 'create', title: t('tour.steps.create.title'), content: t('tour.steps.create.content') },
       { key: 'list', title: t('tour.steps.list.title'), content: t('tour.steps.list.content') },
-      { key: 'clear', title: t('tour.steps.clear.title'), content: t('tour.steps.clear.content') },
     ],
     [t]
   )
@@ -1559,15 +1559,29 @@ const App: React.FC = () => {
           {filter === 'active' && modelLoading && taskStats.inProgress > 0 && (
             <div className="mb-4 flex items-center gap-3 rounded-2xl border border-indigo-100 bg-indigo-50/50 p-3 text-xs font-semibold text-indigo-600 animate-slide-in-up" style={{ animationDelay: '0.1s' }}>
               <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-indigo-100">
-                <Sparkle size={12} weight="fill" className="animate-pulse" />
+                <Megaphone size={12} weight="fill" className="animate-pulse" />
               </div>
               <span>{t('service.modelLoadingHint')}</span>
             </div>
           )}
 
           {serviceStatus === 'ready' && hasSnapshot && filteredTasks.length === 0 && (
-            <div className="rounded-3xl border border-white bg-white/70 p-8 text-center text-slate-400 text-sm">
-              {t('task.noTasks')}
+            <div className="group flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 p-10 transition-colors duration-300 hover:border-indigo-200 animate-slide-in-up">
+              <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-slate-100 text-slate-400 transition-transform duration-300 group-hover:scale-110 group-hover:text-indigo-400">
+                {filter === 'active' ? (
+                  <Sparkle size={32} weight="light" />
+                ) : (
+                  <ClockCounterClockwise size={32} weight="light" />
+                )}
+              </div>
+              <h3 className="text-sm font-semibold text-slate-400">
+                {filter === 'active' ? t('task.noTasks') : t('task.noHistory', 'No completed tasks')}
+              </h3>
+              {filter !== 'active' && (
+                <p className="mt-1 text-xs text-slate-500">
+                  {t('task.historyClean', 'Your history is clean')}
+                </p>
+              )}
             </div>
           )}
           {serviceStatus === 'ready' &&
@@ -1722,7 +1736,7 @@ const App: React.FC = () => {
                       <div className="flex items-start gap-2 mb-1">
                         <h3 className={`text-sm font-bold wrap-break-word leading-snug ${
                           displayStatus === 'done' ? 'text-slate-900 font-extrabold' : 'text-slate-800'
-                        } ${displayStatus === 'canceled' ? 'line-through text-slate-400' : ''}`}>
+                        } ${(displayStatus === 'canceled' || displayStatus === 'canceling') ? 'line-through text-slate-400' : ''}`}>
                           {task.title || task.url}
                         </h3>
                       </div>
@@ -1732,7 +1746,7 @@ const App: React.FC = () => {
                         target="_blank"
                         rel="noreferrer"
                         className={`flex items-center gap-1 text-[11px] text-indigo-400 hover:text-indigo-600 hover:underline transition-colors mb-1 ${
-                          displayStatus === 'canceled' ? 'pointer-events-none opacity-50' : ''
+                          (displayStatus === 'canceled' || displayStatus === 'canceling') ? 'pointer-events-none opacity-50' : ''
                         }`}
                       >
                         <Link size={32} />
