@@ -13,8 +13,8 @@ CHROME_HOSTS_DIR="$HOME/Library/Application Support/Google/Chrome/NativeMessagin
 EDGE_HOSTS_DIR="$HOME/Library/Application Support/Microsoft Edge/NativeMessagingHosts"
 ZIP_NAME="video-text-host-macos.zip"
 # TODO: Replace with actual release URL when publishing
-# Release URL
-DOWNLOAD_URL="https://github.com/kangchainx/video-text-chrome-extension/releases/download/v0.1.0/video-text-host-macos.zip"
+# Release URL (Always points to the latest version)
+DOWNLOAD_URL="https://github.com/kangchainx/video-text-chrome-extension/releases/latest/download/video-text-host-macos.zip"
 
 # Colors
 GREEN='\033[0;32m'
