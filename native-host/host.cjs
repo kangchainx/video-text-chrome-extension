@@ -23,7 +23,15 @@ let lastStartAt = null;
 function log(line) {
   try {
     fs.mkdirSync(path.dirname(LOG_PATH), { recursive: true });
-    fs.appendFileSync(LOG_PATH, `${new Date().toISOString()} ${line}\n`, 'utf8');
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const hour = String(now.getHours()).padStart(2, '0');
+    const minute = String(now.getMinutes()).padStart(2, '0');
+    const second = String(now.getSeconds()).padStart(2, '0');
+    const timestamp = `${year}-${month}-${day}T${hour}:${minute}:${second}`;
+    fs.appendFileSync(LOG_PATH, `${timestamp} ${line}\n`, 'utf8');
   } catch (_) {
     // Never write to stdout/stderr: it breaks native messaging.
   }
