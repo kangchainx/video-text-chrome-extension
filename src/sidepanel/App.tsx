@@ -1334,12 +1334,6 @@ const App: React.FC = () => {
       </header>
 
       <main ref={mainRef} className="flex-1 overflow-y-auto px-6 py-6 relative z-10">
-        {(serviceStatus === 'ready' || serviceStatus === 'starting') && modelLoading && (
-          <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-indigo-100 bg-white/80 px-4 py-2 text-xs font-semibold text-indigo-600 shadow-sm">
-            <ArrowClockwise size={12} className="animate-spin" />
-            {t('service.modelLoading')}
-          </div>
-        )}
         {(serviceStatus === 'error' || diagnosticStage !== 'idle') && (
           <div className="mb-6 rounded-[24px] bg-slate-50 p-5 shadow-sm list-entry">
             {diagnosticStage === 'idle' && (
@@ -1561,6 +1555,16 @@ const App: React.FC = () => {
                 </button>
              </div>
           )}
+
+          {filter === 'active' && modelLoading && taskStats.inProgress > 0 && (
+            <div className="mb-4 flex items-center gap-3 rounded-2xl border border-indigo-100 bg-indigo-50/50 p-3 text-xs font-semibold text-indigo-600 animate-slide-in-up" style={{ animationDelay: '0.1s' }}>
+              <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-indigo-100">
+                <Sparkle size={12} weight="fill" className="animate-pulse" />
+              </div>
+              <span>{t('service.modelLoadingHint')}</span>
+            </div>
+          )}
+
           {serviceStatus === 'ready' && hasSnapshot && filteredTasks.length === 0 && (
             <div className="rounded-3xl border border-white bg-white/70 p-8 text-center text-slate-400 text-sm">
               {t('task.noTasks')}
