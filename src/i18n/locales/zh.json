@@ -8,9 +8,8 @@
     "connecting": "连接中",
     "starting": "启动中",
     "modelLoading": "模型加载中",
-    "notConnected": "服务未连接 · 重试",
-    "stop": "停止服务",
-    "notReady": "本地服务未就绪"
+    "modelLoadingHint": "模型初次加载需要点时间，任务即将开始",
+    "notReady": "服务未就绪"
   },
   "errors": {
     "serviceStartFailed": "服务启动失败，请查看日志",

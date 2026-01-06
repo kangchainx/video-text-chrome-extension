@@ -8,8 +8,7 @@
     "connecting": "Connecting",
     "starting": "Starting",
     "modelLoading": "Loading Model",
-    "notConnected": "Not Connected · Retry",
-    "stop": "Stop Service",
+    "modelLoadingHint": "Initial model loading may take some time, task will start shortly",
     "notReady": "Service Not Ready"
   },
   "errors": {

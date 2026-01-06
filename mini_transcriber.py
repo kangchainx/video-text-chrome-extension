@@ -15,7 +15,6 @@ from fastapi import Body, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
-import yt_dlp
 
 CPU_THREADS = int(os.getenv("TRANSCRIBER_CPU_THREADS", "2"))
 os.environ.setdefault("OMP_NUM_THREADS", str(CPU_THREADS))
@@ -23,12 +22,9 @@ os.environ.setdefault("MKL_NUM_THREADS", str(CPU_THREADS))
 os.environ.setdefault("OPENBLAS_NUM_THREADS", str(CPU_THREADS))
 os.environ.setdefault("NUMEXPR_NUM_THREADS", str(CPU_THREADS))
 
-from faster_whisper import WhisperModel
-
-try:
-    from opencc import OpenCC
-except ImportError:  # pragma: no cover
-    OpenCC = None
+# Lazy loading placeholders
+WhisperModel = None
+yt_dlp = None
 
 app = FastAPI(title="Mini Video Transcriber")
 
@@ -48,12 +44,19 @@ DB_PATH = Path(os.getenv("TRANSCRIBER_DB_PATH", str(TEMP_DIR / "tasks.db")))
 SERVICE_LOG_PATH = Path(os.getenv("TRANSCRIBER_SERVICE_LOG", str(TEMP_DIR / "service.log")))
 
 def _log(message: str) -> None:
+    timestamp = time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime())
+    formatted = f"{timestamp} {message}"
     try:
         SERVICE_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
-        timestamp = time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime())
         with SERVICE_LOG_PATH.open("a", encoding="utf-8", errors="ignore") as handle:
-            handle.write(f"{timestamp} {message}\n")
+            handle.write(f"{formatted}\n")
     except OSError:
+        pass
+    # Always print to stderr so it can be captured by Native Messaging host logs or terminal
+    try:
+        print(formatted, file=sys.stderr)
+    except (BrokenPipeError, OSError):
+        # Ignore broken pipe errors when stderr is closed
         pass
 
 
@@ -63,7 +66,7 @@ def _log_slow(label: str, start: float, extra: str = "") -> None:
         suffix = f" {extra}".strip()
         _log(f"SLOW {label} elapsed={elapsed:.2f}s {suffix}".strip())
 
-MODEL_SIZE = os.getenv("WHISPER_MODEL", "tiny")
+MODEL_SIZE = os.getenv("WHISPER_MODEL", "base")
 WHISPER_DEVICE = os.getenv("WHISPER_DEVICE", "cpu")
 WHISPER_COMPUTE = os.getenv("WHISPER_COMPUTE", "int8")
 IDLE_SECONDS = int(os.getenv("TRANSCRIBER_IDLE_SECONDS", "3600"))
@@ -97,6 +100,11 @@ model_ready = False
 model_loading = False
 model_error = None
 
+# Will be updated by _preload_heavy_libs
+MODEL_CACHE_PATH: Optional[Path] = None
+MODEL_CACHED = False
+OPENCC_T2S = None
+
 def _detect_model_cache() -> Optional[Path]:
     override = os.getenv("WHISPER_MODEL_DIR") or os.getenv("WHISPER_CACHE_DIR")
     if override:
@@ -123,13 +131,6 @@ def _detect_model_cache() -> Optional[Path]:
         if candidate.exists():
             return candidate
     return None
-
-MODEL_CACHE_PATH = _detect_model_cache()
-MODEL_CACHED = MODEL_CACHE_PATH is not None
-_log(f"MODEL_CACHE cached={MODEL_CACHED} path={MODEL_CACHE_PATH}")
-_log("MODEL_LAZY_LOAD enabled=true")
-
-OPENCC_T2S = OpenCC("t2s") if OpenCC else None
 
 app.add_middleware(
     CORSMiddleware,
@@ -205,6 +206,76 @@ def service_status(request: Request, token: Optional[str] = Query(None)):
 @app.on_event("startup")
 def _on_startup() -> None:
     _log("HTTP_READY")
+    # Start background warmup of heavy libraries
+    threading.Thread(target=_warmup_modules, daemon=True).start()
+
+
+def _warmup_modules() -> None:
+    """Import heavy libraries and initialize resources in background."""
+    global yt_dlp, WhisperModel, OpenCC, MODEL_CACHE_PATH, MODEL_CACHED, OPENCC_T2S
+    
+    _log("")
+    _log("=" * 60)
+    _log("🚀 开始预热服务组件 (Starting service warmup)")
+    _log("=" * 60)
+    
+    try:
+        # 1. Warmup yt_dlp
+        _log("")
+        _log("📦 正在加载 yt-dlp 视频下载模块...")
+        start = time.monotonic()
+        import yt_dlp as _yt_dlp
+        yt_dlp = _yt_dlp
+        elapsed = time.monotonic() - start
+        _log(f"✅ yt-dlp 加载完成，耗时 {elapsed:.2f}秒")
+        
+        # 2. Warmup faster_whisper
+        _log("")
+        _log("📦 正在加载 Whisper AI 转录模块...")
+        start = time.monotonic()
+        from faster_whisper import WhisperModel as _WhisperModel
+        WhisperModel = _WhisperModel
+        elapsed = time.monotonic() - start
+        _log(f"✅ Whisper 模块加载完成，耗时 {elapsed:.2f}秒")
+        
+        # 3. Check model cache
+        _log("")
+        _log("🔍 检查本地模型缓存...")
+        MODEL_CACHE_PATH = _detect_model_cache()
+        MODEL_CACHED = MODEL_CACHE_PATH is not None
+        if MODEL_CACHED:
+            _log(f"✅ 找到缓存模型: {MODEL_CACHE_PATH}")
+        else:
+            _log("⚠️  未找到缓存模型，首次转录时将自动下载")
+
+        # 4. Warmup OpenCC
+        _log("")
+        _log("📦 正在加载 OpenCC 繁简转换模块...")
+        start = time.monotonic()
+        try:
+            from opencc import OpenCC as _OpenCC
+            OpenCC = _OpenCC
+            OPENCC_T2S = OpenCC("t2s")
+            elapsed = time.monotonic() - start
+            _log(f"✅ OpenCC 加载完成，耗时 {elapsed:.2f}秒")
+        except ImportError:
+            _log("⚠️  OpenCC 未安装，跳过繁简转换功能")
+        
+        _log("")
+        _log("=" * 60)
+        _log("🎉 服务预热完成！所有组件已就绪")
+        _log("=" * 60)
+        _log("")
+            
+    except Exception as exc:
+        _log("")
+        _log("=" * 60)
+        _log(f"❌ 预热过程出错: {exc}")
+        _log("=" * 60)
+        _log("")
+    
+    _log("WARMUP_DONE")
+
 
 
 def _require_token(request: Request, token: Optional[str]) -> None:
@@ -231,16 +302,32 @@ def _sanitize_filename(name: str) -> str:
 
 
 def _to_simplified(text: str) -> str:
-    if not text or not OPENCC_T2S:
+    global OPENCC_T2S
+    if not text:
         return text
+    
+    # Try to initialize if not yet ready (e.g. called before warmup finished)
+    if OPENCC_T2S is None:
+        try:
+            from opencc import OpenCC
+            OPENCC_T2S = OpenCC("t2s")
+        except ImportError:
+            return text
+            
     try:
         return OPENCC_T2S.convert(text)
     except Exception:
         return text
 
 
-def _get_whisper_model() -> WhisperModel:
-    global whisper_model, model_ready, model_loading, model_error
+def _get_whisper_model():
+    global whisper_model, model_ready, model_loading, model_error, WhisperModel
+    
+    # Ensure WhisperModel class is available
+    if WhisperModel is None:
+        from faster_whisper import WhisperModel as _WM
+        WhisperModel = _WM
+    
     wait_logged = False
     while True:
         with model_lock:
@@ -627,6 +714,7 @@ def _resolve_audio_path(task_id: str, prepared_filename: str) -> Path:
 
 
 def _run_yt_dlp(url: str, ydl_opts: dict, task_id: str) -> Path:
+    import yt_dlp
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=True)
         prepared_filename = ydl.prepare_filename(info)
