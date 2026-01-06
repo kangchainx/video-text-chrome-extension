@@ -51,7 +51,7 @@ jobs:
             --hidden-import=opencc.__main__ \
             --hidden-import=tokenizers.tools \
             --hidden-import=curl_cffi \
-            --target-arch x86_64,arm64 \
+            --target-arch universal2 \
             --clean \
             --log-level=INFO \
             --workpath "native-host/build/work" \
