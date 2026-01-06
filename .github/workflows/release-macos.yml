@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   build-macos:
-    runs-on: macos-latest
+    runs-on: macos-14 # Use M1 runner (Apple Silicon) to build arm64 natively
 
     steps:
       - uses: actions/checkout@v4
@@ -24,6 +24,8 @@ jobs:
       - name: Install Dependencies
         run: |
           pip install -r requirements.txt
+          # Force reinstall binary packages to ensure they match the runner architecture
+          pip install --force-reinstall --no-cache-dir tokenizers ctranslate2 faster-whisper
           pip install pyinstaller
 
       - name: Build with PyInstaller
@@ -51,7 +53,6 @@ jobs:
             --hidden-import=opencc.__main__ \
             --hidden-import=tokenizers.tools \
             --hidden-import=curl_cffi \
-            --target-arch universal2 \
             --clean \
             --log-level=INFO \
             --workpath "native-host/build/work" \
