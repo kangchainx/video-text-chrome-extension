@@ -1,0 +1,102 @@
+name: Build and Release macOS Native Host
+
+on:
+  push:
+    tags:
+      - "v*" # Trigger on version tags, e.g. v0.1.0
+
+permissions:
+  contents: write
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install Dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Build with PyInstaller
+        run: |
+          # Use a simplified build script inline to ensure CI compatibility
+          mkdir -p native-host/build
+          mkdir -p native-host/dist
+
+          # PyInstaller Command (Cleaned up from your shell script)
+          pyinstaller \
+            --name video-text-transcriber \
+            --windowed \
+            --collect-all faster_whisper \
+            --collect-all yt_dlp \
+            --collect-all opencc \
+            --collect-all ctranslate2 \
+            --collect-all tokenizers \
+            --collect-data mutagen \
+            --collect-data brotli \
+            --collect-data certifi \
+            --collect-data secretstorage \
+            --collect-data curl_cffi \
+            --hidden-import=ctranslate2.converters.eole_ct2 \
+            --hidden-import=faster_whisper.assets \
+            --hidden-import=opencc.__main__ \
+            --hidden-import=tokenizers.tools \
+            --hidden-import=curl_cffi \
+            --target-arch x86_64,arm64 \
+            --clean \
+            --log-level=INFO \
+            --workpath "native-host/build/work" \
+            --distpath "native-host/dist" \
+            mini_transcriber.py
+
+      - name: Package to ZIP
+        run: |
+          # Create staging directory
+          mkdir -p staging/video-text-transcriber
+
+          # Copy compiled app
+          cp -R "native-host/dist/video-text-transcriber" "staging/"
+
+          # Copy helper scripts
+          cp "native-host/host-macos.sh" "staging/"
+          cp "native-host/host.cjs" "staging/"
+
+          # Create Extension ID file (using a placeholder or passed env var if needed, 
+          # for public release usually we leave it empty or direct user to config)
+          # Assuming the user installs it via the extension which might have a hardcoded ID?
+          # For now, let's use your ID or leave a placeholder.
+          echo "cbljhchajfoflmoljpbiogiciknkmgoh" > "staging/extension-id.txt"
+
+          # Set permissions
+          chmod +x staging/host-macos.sh
+          chmod +x staging/video-text-transcriber/video-text-transcriber
+
+          # Zip it
+          cd staging
+          zip -r ../video-text-host-macos.zip .
+
+      - name: Prepare Install Script
+        run: |
+          # Ensure the install script is available as a standalone asset
+          cp native-host/install_mac.sh install_mac.sh
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: |
+            video-text-host-macos.zip
+            install_mac.sh
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

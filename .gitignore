@@ -11,3 +11,13 @@ native-host/macos-pkg/build
 .vscode
 CLAUDE.md
 .claude
+
+# Native Host Refactoring & Build Artifacts
+native-host/build/
+native-host/_bak/
+native-host/dist_test/
+native-host/*.zip
+native-host/host.cjs.bak
+
+# AI Session Record
+agent_session_record.md
