@@ -800,22 +800,13 @@ def _download_audio(task_id: str, url: str, cookiefile: Optional[str]) -> Path:
         ],
     }
 
-    last_error: Optional[Exception] = None
-
     try:
-        opts = {**base_opts, "cookiesfrombrowser": ("chrome",)}
+        opts = base_opts.copy()
+        if cookiefile and os.path.exists(cookiefile):
+            opts["cookiefile"] = cookiefile
         return _run_yt_dlp(url, opts, task_id)
     except Exception as exc:
-        last_error = exc
-
-    if cookiefile:
-        try:
-            opts = {**base_opts, "cookiefile": cookiefile}
-            return _run_yt_dlp(url, opts, task_id)
-        except Exception as exc:
-            last_error = exc
-
-    raise RuntimeError(f"下载音频失败: {last_error}")
+        raise RuntimeError(f"下载音频失败: {exc}")
 
 
 def _transcribe_audio(task_id: str, audio_path: Path) -> str:
