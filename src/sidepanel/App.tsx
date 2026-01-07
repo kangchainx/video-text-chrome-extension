@@ -960,10 +960,20 @@ const App: React.FC = () => {
         throw new Error(t('errors.notVideoPage'))
       }
 
+      // Collect cookies for the video page to avoid 403 Forbidden errors
+      // and support member-only contents.
+      let cookies: chrome.cookies.Cookie[] = []
+      try {
+        cookies = await collectCookies(url)
+      } catch (err) {
+        console.warn("Failed to collect cookies:", err)
+      }
+
       const payload = {
         url,
         title: tab.title || '',
         site: getSiteFromUrl(url),
+        cookies: cookies,
       }
       await apiFetch('/api/tasks', {
         method: 'POST',

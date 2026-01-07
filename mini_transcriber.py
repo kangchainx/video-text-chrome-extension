@@ -717,11 +717,14 @@ def _detect_ffmpeg() -> Optional[str]:
     # 1. Check env var
     override = os.getenv("FFMPEG_BINARY")
     if override and os.path.exists(override):
+        _log(f"FFMPEG: Found in env var: {override}")
         return override
 
     # 2. Check system PATH
     import shutil
-    if shutil.which("ffmpeg"):
+    path_ffmpeg = shutil.which("ffmpeg")
+    if path_ffmpeg:
+        _log(f"FFMPEG: Found in PATH: {path_ffmpeg}")
         return None  # Let yt-dlp find it in PATH
 
     # 3. Check common macOS/Linux paths
@@ -733,23 +736,32 @@ def _detect_ffmpeg() -> Optional[str]:
     ]
     for c in candidates:
         if os.path.exists(c) and os.access(c, os.X_OK):
+            _log(f"FFMPEG: Found in system candidate: {c}")
             return c
             
     # 4. Check relative to binary (Windows/bundled)
     # Check inside 'ffmpeg' subdirectory if it exists
     bundled_dir = BASE_DIR / "ffmpeg"
+    _log(f"FFMPEG: Checking bundled dir: {bundled_dir} (exists={bundled_dir.is_dir()})")
+    
     if bundled_dir.is_dir():
         for name in ["ffmpeg.exe", "ffmpeg"]:
             candidate = bundled_dir / name
-            if candidate.is_file():
+            exists = candidate.is_file()
+            # _log(f"FFMPEG: Checking {candidate} -> {exists}")
+            if exists:
+                _log(f"FFMPEG: Found bundled in subdir: {candidate}")
                 return str(candidate)
 
     # Check in base directory
     for name in ["ffmpeg.exe", "ffmpeg"]:
         candidate = BASE_DIR / name
-        if candidate.is_file():
+        exists = candidate.is_file()
+        if exists:
+            _log(f"FFMPEG: Found bundled in root: {candidate}")
             return str(candidate)
 
+    _log("FFMPEG: Not found anywhere")
     return None
 
 
@@ -761,6 +773,8 @@ def _run_yt_dlp(url: str, ydl_opts: dict, task_id: str) -> Path:
         ffmpeg_bin = _detect_ffmpeg()
         if ffmpeg_bin:
             ydl_opts["ffmpeg_location"] = ffmpeg_bin
+
+    _log(f"DEBUG: ydl_opts['ffmpeg_location'] = {ydl_opts.get('ffmpeg_location')}")
             
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=True)
