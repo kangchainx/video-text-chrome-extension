@@ -107,7 +107,7 @@ python mini_transcriber.py
 
 ## 排错
 
--   **"Native host **has** exited"**：检查 `host-macos.sh` 是否可执行，以及 `manifest.json` 中的路径是否正确。
+-   **Native host has exited**：检查 `host-macos.sh` 是否可执行，以及 `manifest.json` 中的路径是否正确。
 -   **Permission Denied**：对 `native-host/` 目录下的所有脚本运行 `chmod +x`。
 -   **下载错误**：如果是 Bilibili 1080p 视频，需要扩展具备读取 `.bilibili.com` Cookie 的权限。
 

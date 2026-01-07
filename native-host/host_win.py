@@ -107,6 +107,12 @@ def ensure_running():
     if not token:
         import uuid
         token = uuid.uuid4().hex
+        try:
+            os.makedirs(os.path.dirname(TOKEN_PATH), exist_ok=True)
+            with open(TOKEN_PATH, "w", encoding="utf-8") as f:
+                f.write(token)
+        except Exception as e:
+            log(f"[host] failed to write token: {e}")
     
     start_service(token)
     log("[host] service_starting (health pending)")

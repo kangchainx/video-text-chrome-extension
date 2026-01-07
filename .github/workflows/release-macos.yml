@@ -74,8 +74,10 @@ jobs:
           # Create Extension ID file (using a placeholder or passed env var if needed, 
           # for public release usually we leave it empty or direct user to config)
           # Assuming the user installs it via the extension which might have a hardcoded ID?
-          # For now, let's use your ID or leave a placeholder.
-          echo "cbljhchajfoflmoljpbiogiciknkmgoh" > "staging/extension-id.txt"
+          # Read Extension ID from file
+          EXTENSION_ID=$(cat .github/EXTENSION_ID | tr -d '\n\r ')
+          echo "$EXTENSION_ID" > "staging/extension-id.txt"
+          echo "Using Extension ID: $EXTENSION_ID"
 
           # Set permissions
           chmod +x staging/host-macos.sh

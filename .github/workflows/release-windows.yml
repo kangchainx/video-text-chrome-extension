@@ -41,8 +41,11 @@ jobs:
           # Copy all files from the built folder to staging root
           Copy-Item -Path "$SourceDir\*" -Destination $StagingDir -Recurse -Force
 
-          # Create Extension ID file (Placeholder - UPDATE THIS before release)
-          "cbljhchajfoflmoljpbiogiciknkmgoh" | Out-File -FilePath "$StagingDir\extension-id.txt" -Encoding ascii
+          # Read Extension ID from source file
+          $ExtensionIdContent = Get-Content -Path ".github/EXTENSION_ID" -Raw
+          $ExtensionId = $ExtensionIdContent.Trim()
+          $ExtensionId | Out-File -FilePath "$StagingDir\extension-id.txt" -Encoding ascii
+          Write-Host "Using Extension ID: $ExtensionId"
 
           # --- Download and Bundle FFmpeg (Windows x64) ---
           Write-Host "Downloading FFmpeg for Windows..."
