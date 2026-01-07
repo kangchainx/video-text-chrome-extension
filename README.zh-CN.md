@@ -21,17 +21,24 @@
 
 ## 安装（普通用户）
 
-### 方案 A：一键安装包（macOS）
-*(推荐大多数用户使用)*
+### 方案 A：一键安装（推荐）
+*(适用于大多数用户)*
 
-1.  **安装 Chrome 扩展**：在 `chrome://extensions`（开发者模式）中加载 `dist` 文件夹。
-2.  **安装本地服务**：
-    下载并运行安装程序。这将为你设置必要的 Python 环境和 Native Messaging 主机。
-    ```bash
-    # (示例：如果你构建了 pkg)
-    installer -pkg native-host/VideoTextHost.pkg -target CurrentUserHomeDirectory
-    ```
-    > *注意：发布版二进制文件即将推出。*
+**macOS 用户**:
+复制并粘贴以下命令到终端中运行：
+```bash
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/kangchainx/video-text-chrome-extension/main/native-host/install_mac.sh)"
+```
+（或者从 [最新发布页面](https://github.com/kangchainx/video-text-chrome-extension/releases/latest) 下载 `install_mac.sh` 并运行）
+
+**Windows 用户**:
+1. 从 [最新发布页面](https://github.com/kangchainx/video-text-chrome-extension/releases/latest) 下载 `install_win.ps1`。
+2. 右键点击文件，选择 **"使用 PowerShell 运行"**。
+
+脚本将会自动完成以下步骤：
+1. 下载最新的 Native Host 服务包。
+2. 将其安装到你的用户目录。
+3. 向 Chrome/Edge 浏览器注册 Native Host 配置。
 
 ### 方案 B：手动设置（开发者）
 
@@ -93,7 +100,7 @@ python mini_transcriber.py
 
 ## 排错
 
--   **"Native host has exited"**：检查 `host-macos.sh` 是否可执行，以及 `manifest.json` 中的路径是否正确。
+-   **"Native host **has** exited"**：检查 `host-macos.sh` 是否可执行，以及 `manifest.json` 中的路径是否正确。
 -   **Permission Denied**：对 `native-host/` 目录下的所有脚本运行 `chmod +x`。
 -   **下载错误**：如果是 Bilibili 1080p 视频，需要扩展具备读取 `.bilibili.com` Cookie 的权限。
 

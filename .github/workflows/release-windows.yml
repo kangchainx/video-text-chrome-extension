@@ -1,0 +1,61 @@
+name: Build and Release Windows Native Host
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install Dependencies
+        run: |
+          pip install -r requirements.txt
+
+      - name: Build with PyInstaller
+        run: |
+          # Run PyInstaller using the spec file
+          pyinstaller native-host/windows.spec --workpath native-host/build/work --distpath native-host/dist --clean
+
+      - name: Create Distribution ZIP
+        shell: pwsh
+        run: |
+          $StagingDir = "native-host/staging"
+          $SourceDir = "native-host/dist/video-text-transcriber"
+
+          New-Item -ItemType Directory -Path $StagingDir -Force
+
+          # Copy all files from the built folder to staging root
+          Copy-Item -Path "$SourceDir\*" -Destination $StagingDir -Recurse -Force
+
+          # Create Extension ID file (Placeholder - UPDATE THIS before release)
+          "cbljhchajfoflmoljpbiogiciknkmgoh" | Out-File -FilePath "$StagingDir\extension-id.txt" -Encoding ascii
+
+          # Create ZIP
+          $ZipPath = "video-text-host-win.zip"
+          Compress-Archive -Path "$StagingDir\*" -DestinationPath $ZipPath
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: |
+            video-text-host-win.zip
+            native-host/install_win.ps1
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

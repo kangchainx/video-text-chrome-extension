@@ -21,17 +21,24 @@ Unlike cloud-based services with time limits and privacy risks, this extension r
 
 ## Installation (For Users)
 
-### Option A: One-Click Installer (macOS)
+### Option A: One-Click Installer (macOS & Windows)
 *(Recommended for most users)*
 
-1.  **Install the Chrome Extension**: Load the `dist` folder in `chrome://extensions` (Developer Mode).
-2.  **Install the Local Service**:
-    Download the installer and run it. This will set up the necessary Python environment and Native Messaging host for you.
-    ```bash
-    # (Example command if you built the pkg)
-    installer -pkg native-host/VideoTextHost.pkg -target CurrentUserHomeDirectory
-    ```
-    > *Note: Release binaries coming soon.*
+**macOS**:
+Copy and paste this command into your Terminal:
+```bash
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/kangchainx/video-text-chrome-extension/main/native-host/install_mac.sh)"
+```
+(Or download `install_mac.sh` from [Latest Release](https://github.com/kangchainx/video-text-chrome-extension/releases/latest) and run it)
+
+**Windows**:
+1. Download `install_win.ps1` from the [Latest Release](https://github.com/kangchainx/video-text-chrome-extension/releases/latest).
+2. Right-click the file and select **"Run with PowerShell"**.
+
+These scripts will automatically:
+1. Download the latest Native Host release.
+2. Install it to your user directory.
+3. Register the Native Host manifest with Chrome/Edge.
 
 ### Option B: Manual Setup (For Developers)
 
