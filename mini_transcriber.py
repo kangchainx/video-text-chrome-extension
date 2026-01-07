@@ -736,12 +736,19 @@ def _detect_ffmpeg() -> Optional[str]:
             return c
             
     # 4. Check relative to binary (Windows/bundled)
-    bundled = BASE_DIR / "ffmpeg"
-    if bundled.exists(): # Directory
-        exe = bundled / "ffmpeg.exe"
-        if exe.exists(): return str(exe)
-    if (BASE_DIR / "ffmpeg.exe").exists():
-        return str(BASE_DIR / "ffmpeg.exe")
+    # Check inside 'ffmpeg' subdirectory if it exists
+    bundled_dir = BASE_DIR / "ffmpeg"
+    if bundled_dir.is_dir():
+        for name in ["ffmpeg.exe", "ffmpeg"]:
+            candidate = bundled_dir / name
+            if candidate.is_file():
+                return str(candidate)
+
+    # Check in base directory
+    for name in ["ffmpeg.exe", "ffmpeg"]:
+        candidate = BASE_DIR / name
+        if candidate.is_file():
+            return str(candidate)
 
     return None
 
