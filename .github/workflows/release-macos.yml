@@ -81,6 +81,18 @@ jobs:
           chmod +x staging/host-macos.sh
           chmod +x staging/video-text-transcriber/video-text-transcriber
 
+          # --- Download and Bundle FFmpeg (macOS ARM64) ---
+          echo "Downloading FFmpeg for macOS ARM64..."
+          curl -L -o ffmpeg.zip https://www.osxexperts.net/ffmpeg71arm.zip
+          unzip -q ffmpeg.zip
+          # Finding and moving the binary
+          # The zip usually contains "ffmpeg" binary directly or in a folder.
+          # We search for it and move it to the same dir as the main executable.
+          find . -name "ffmpeg" -type f -perm +111 -exec cp {} "staging/video-text-transcriber/ffmpeg" \;
+          chmod +x "staging/video-text-transcriber/ffmpeg"
+          echo "FFmpeg bundled successfully."
+          # ------------------------------------------------
+
           # Zip it
           cd staging
           zip -r ../video-text-host-macos.zip .

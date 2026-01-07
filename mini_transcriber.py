@@ -713,8 +713,48 @@ def _resolve_audio_path(task_id: str, prepared_filename: str) -> Path:
     raise RuntimeError("音频文件未生成")
 
 
+def _detect_ffmpeg() -> Optional[str]:
+    # 1. Check env var
+    override = os.getenv("FFMPEG_BINARY")
+    if override and os.path.exists(override):
+        return override
+
+    # 2. Check system PATH
+    import shutil
+    if shutil.which("ffmpeg"):
+        return None  # Let yt-dlp find it in PATH
+
+    # 3. Check common macOS/Linux paths
+    candidates = [
+        "/opt/homebrew/bin/ffmpeg",
+        "/usr/local/bin/ffmpeg",
+        "/usr/bin/ffmpeg",
+        "/bin/ffmpeg",
+    ]
+    for c in candidates:
+        if os.path.exists(c) and os.access(c, os.X_OK):
+            return c
+            
+    # 4. Check relative to binary (Windows/bundled)
+    bundled = BASE_DIR / "ffmpeg"
+    if bundled.exists(): # Directory
+        exe = bundled / "ffmpeg.exe"
+        if exe.exists(): return str(exe)
+    if (BASE_DIR / "ffmpeg.exe").exists():
+        return str(BASE_DIR / "ffmpeg.exe")
+
+    return None
+
+
 def _run_yt_dlp(url: str, ydl_opts: dict, task_id: str) -> Path:
     import yt_dlp
+    
+    # Inject ffmpeg location if detected and not in PATH
+    if "ffmpeg_location" not in ydl_opts:
+        ffmpeg_bin = _detect_ffmpeg()
+        if ffmpeg_bin:
+            ydl_opts["ffmpeg_location"] = ffmpeg_bin
+            
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=True)
         prepared_filename = ydl.prepare_filename(info)
@@ -738,7 +778,6 @@ def _download_audio(task_id: str, url: str, cookiefile: Optional[str]) -> Path:
 
     base_opts = {
         "format": "bestaudio/best",
-        "ffmpeg_location": "/opt/homebrew/bin/ffmpeg",
         "outtmpl": outtmpl,
         "quiet": True,
         "noplaylist": True,
