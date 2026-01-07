@@ -1,12 +1,19 @@
-# Video Text Chrome Extension
+<div align="center">
 
-**[中文](README.zh-CN.md)**
+<img src="public/logos/promo-small-440x280.png" width="100%" alt="Video Text Chrome Extension Logo" />
 
-> **Your Private, Unlimited, Local Transcription Studio.**
->
-> An advanced Chrome Side Panel tool that turns videos into text using local AI power. Secure, free, and unlimited.
+**Your Private, Unlimited, Local Transcription Studio.**
 
-![License](https://img.shields.io/badge/license-ISC-blue.svg)
+An advanced Chrome Side Panel tool that turns videos into text using local AI power. Secure, free, and unlimited.
+
+[![GitHub Stars](https://img.shields.io/github/stars/kangchainx/video-text-chrome-extension?style=flat-square&logo=github)](https://github.com/kangchainx/video-text-chrome-extension/stargazers)
+[![GitHub Forks](https://img.shields.io/github/forks/kangchainx/video-text-chrome-extension?style=flat-square&logo=github)](https://github.com/kangchainx/video-text-chrome-extension/network/members)
+[![License](https://img.shields.io/github/license/kangchainx/video-text-chrome-extension?style=flat-square)](https://github.com/kangchainx/video-text-chrome-extension/blob/main/LICENSE)
+[![Issues](https://img.shields.io/github/issues/kangchainx/video-text-chrome-extension?style=flat-square)](https://github.com/kangchainx/video-text-chrome-extension/issues)
+
+[English](README.md) | [简体中文](README.zh-CN.md)
+
+</div>
 
 ## Why This Extension?
 
