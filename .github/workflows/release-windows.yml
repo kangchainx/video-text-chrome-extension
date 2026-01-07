@@ -41,8 +41,32 @@ jobs:
           # Copy all files from the built folder to staging root
           Copy-Item -Path "$SourceDir\*" -Destination $StagingDir -Recurse -Force
 
-          # Create Extension ID file (Placeholder - UPDATE THIS before release)
-          "cbljhchajfoflmoljpbiogiciknkmgoh" | Out-File -FilePath "$StagingDir\extension-id.txt" -Encoding ascii
+          # Read Extension ID from source file
+          $ExtensionIdContent = Get-Content -Path ".github/EXTENSION_ID" -Raw
+          $ExtensionId = $ExtensionIdContent.Trim()
+          $ExtensionId | Out-File -FilePath "$StagingDir\extension-id.txt" -Encoding ascii
+          Write-Host "Using Extension ID: $ExtensionId"
+
+          # --- Download and Bundle FFmpeg (Windows x64) ---
+          Write-Host "Downloading FFmpeg for Windows..."
+          $FFmpegUrl = "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip"
+          $FFmpegZip = "ffmpeg.zip"
+          Invoke-WebRequest -Uri $FFmpegUrl -OutFile $FFmpegZip
+
+          Write-Host "Extracting FFmpeg..."
+          Expand-Archive -LiteralPath $FFmpegZip -DestinationPath "ffmpeg_temp" -Force
+
+          # Move ffmpeg.exe to staging root (where video-text-transcriber.exe is)
+          # Structure is typically ffmpeg-master-latest-win64-gpl/bin/ffmpeg.exe
+          $FFmpegBin = Get-ChildItem -Path "ffmpeg_temp" -Recurse -Filter "ffmpeg.exe" | Select-Object -First 1
+          if ($FFmpegBin) {
+              Copy-Item -Path $FFmpegBin.FullName -Destination "$StagingDir\ffmpeg.exe" -Force
+              Write-Host "FFmpeg bundled successfully."
+          } else {
+              Write-Error "Could not find ffmpeg.exe in downloaded zip"
+              exit 1
+          }
+          # ------------------------------------------------
 
           # Create ZIP
           $ZipPath = "video-text-host-win.zip"

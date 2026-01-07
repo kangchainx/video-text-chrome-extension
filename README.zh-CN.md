@@ -1,12 +1,19 @@
-# Video Text Chrome Extension
+<div align="center">
 
-**[English](README.md)**
+<img src="public/logos/promo-small-440x280.png" width="100%" alt="Video Text Chrome Extension Logo" />
 
-> **你的私人、无限、本地转录工作室。**
->
-> 一个高级 Chrome 侧边栏工具，利用本地 AI 算力将视频转换为文字。安全、免费且无限制。
+**你的私人、无限、本地转录工作室。**
 
-![License](https://img.shields.io/badge/license-ISC-blue.svg)
+一个高级 Chrome 侧边栏工具，利用本地 AI 算力将视频转换为文字。安全、免费且无限制。
+
+[![GitHub Stars](https://img.shields.io/github/stars/kangchainx/video-text-chrome-extension?style=flat-square&logo=github)](https://github.com/kangchainx/video-text-chrome-extension/stargazers)
+[![GitHub Forks](https://img.shields.io/github/forks/kangchainx/video-text-chrome-extension?style=flat-square&logo=github)](https://github.com/kangchainx/video-text-chrome-extension/network/members)
+[![License](https://img.shields.io/github/license/kangchainx/video-text-chrome-extension?style=flat-square)](https://github.com/kangchainx/video-text-chrome-extension/blob/main/LICENSE)
+[![Issues](https://img.shields.io/github/issues/kangchainx/video-text-chrome-extension?style=flat-square)](https://github.com/kangchainx/video-text-chrome-extension/issues)
+
+[English](README.md) | [简体中文](README.zh-CN.md)
+
+</div>
 
 ## 为什么选择本扩展？
 
@@ -100,7 +107,7 @@ python mini_transcriber.py
 
 ## 排错
 
--   **"Native host **has** exited"**：检查 `host-macos.sh` 是否可执行，以及 `manifest.json` 中的路径是否正确。
+-   **Native host has exited**：检查 `host-macos.sh` 是否可执行，以及 `manifest.json` 中的路径是否正确。
 -   **Permission Denied**：对 `native-host/` 目录下的所有脚本运行 `chmod +x`。
 -   **下载错误**：如果是 Bilibili 1080p 视频，需要扩展具备读取 `.bilibili.com` Cookie 的权限。
 

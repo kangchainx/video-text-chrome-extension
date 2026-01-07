@@ -34,7 +34,8 @@
     "sseReconnectFailed": "实时连接失败，请刷新页面重试",
     "requestFailed": "请求失败",
     "cannotConnectService": "无法连接本地服务",
-    "serviceUnavailable": "本地服务不可用"
+    "serviceUnavailable": "本地服务不可用",
+    "notVideoPage": "请先打开视频播放页面"
   },
   "task": {
     "create": "添加任务",
