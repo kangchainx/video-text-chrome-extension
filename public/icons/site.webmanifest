@@ -1,0 +1,24 @@
+{
+  "name": "视频转文字助手",
+  "short_name": "视频转文字",
+  "icons": [
+    {
+      "src": "icon32.png",
+      "sizes": "32x32",
+      "type": "image/png"
+    },
+    {
+      "src": "icon48.png",
+      "sizes": "48x48",
+      "type": "image/png"
+    },
+    {
+      "src": "icon128.png",
+      "sizes": "128x128",
+      "type": "image/png"
+    }
+  ],
+  "theme_color": "#6366f1",
+  "background_color": "#ffffff",
+  "display": "standalone"
+}
