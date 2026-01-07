@@ -750,16 +750,22 @@ def _detect_ffmpeg() -> Optional[str]:
             exists = candidate.is_file()
             # _log(f"FFMPEG: Checking {candidate} -> {exists}")
             if exists:
-                _log(f"FFMPEG: Found bundled in subdir: {candidate}")
-                return str(candidate)
+                if os.access(candidate, os.X_OK):
+                    _log(f"FFMPEG: Found bundled in subdir: {candidate}")
+                    return str(candidate)
+                else:
+                    _log(f"FFMPEG: Found bundled but NOT EXECUTABLE: {candidate}")
 
     # Check in base directory
     for name in ["ffmpeg.exe", "ffmpeg"]:
         candidate = BASE_DIR / name
         exists = candidate.is_file()
         if exists:
-            _log(f"FFMPEG: Found bundled in root: {candidate}")
-            return str(candidate)
+            if os.access(candidate, os.X_OK):
+                _log(f"FFMPEG: Found bundled in root: {candidate}")
+                return str(candidate)
+            else:
+                 _log(f"FFMPEG: Found bundled in root but NOT EXECUTABLE: {candidate}")
 
     _log("FFMPEG: Not found anywhere")
     return None

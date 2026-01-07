@@ -63,6 +63,9 @@ echo "✅ Quarantine attributes removed."
 # Set permissions
 chmod +x host-macos.sh
 chmod +x video-text-transcriber/video-text-transcriber
+if [ -f "video-text-transcriber/ffmpeg" ]; then
+    chmod +x video-text-transcriber/ffmpeg
+fi
 
 # Get Extension ID
 if [ -f "extension-id.txt" ]; then

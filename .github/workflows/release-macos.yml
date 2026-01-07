@@ -90,9 +90,18 @@ jobs:
           # Finding and moving the binary
           # The zip usually contains "ffmpeg" binary directly or in a folder.
           # We search for it and move it to the same dir as the main executable.
-          find . -name "ffmpeg" -type f -perm +111 -exec cp {} "staging/video-text-transcriber/ffmpeg" \;
-          chmod +x "staging/video-text-transcriber/ffmpeg"
-          echo "FFmpeg bundled successfully."
+          # We use -name "ffmpeg" and verify it's a file, ignoring permissions initially to be safe.
+          FFMPEG_PATH=$(find . -name "ffmpeg" -type f | head -n 1)
+          if [ -n "$FFMPEG_PATH" ]; then
+            echo "Found ffmpeg at $FFMPEG_PATH"
+            chmod +x "$FFMPEG_PATH"
+            cp "$FFMPEG_PATH" "staging/video-text-transcriber/ffmpeg"
+            chmod +x "staging/video-text-transcriber/ffmpeg"
+            echo "FFmpeg bundled successfully."
+          else
+            echo "ERROR: FFmpeg binary not found in downloaded zip!"
+            exit 1
+          fi
           # ------------------------------------------------
 
           # Zip it
