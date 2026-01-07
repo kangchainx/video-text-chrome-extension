@@ -933,6 +933,33 @@ const App: React.FC = () => {
       if (!url.startsWith('http')) {
         throw new Error(t('errors.pageNotSupported'))
       }
+
+      // 校验是否为视频播放页
+      const isVideoPage = () => {
+        try {
+          const { hostname, pathname, search } = new URL(url)
+          if (hostname.includes('youtube.com') || hostname.includes('youtu.be')) {
+            if (hostname === 'youtu.be') return true
+            if (pathname.includes('/watch') && search.includes('v=')) return true
+            if (pathname.includes('/shorts/')) return true
+            if (pathname.includes('/live/')) return true
+            return false
+          }
+          if (hostname.includes('bilibili.com')) {
+            if (pathname.includes('/video/')) return true
+            if (pathname.includes('/bangumi/play/')) return true
+            return false
+          }
+          return true
+        } catch {
+          return false
+        }
+      }
+
+      if (!isVideoPage()) {
+        throw new Error(t('errors.notVideoPage'))
+      }
+
       const payload = {
         url,
         title: tab.title || '',

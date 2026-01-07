@@ -34,7 +34,8 @@
     "sseReconnectFailed": "Real-time connection failed, please refresh",
     "requestFailed": "Request failed",
     "cannotConnectService": "Cannot connect to local service",
-    "serviceUnavailable": "Local service unavailable"
+    "serviceUnavailable": "Local service unavailable",
+    "notVideoPage": "Please open a video play page"
   },
   "task": {
     "create": "Create Task",
