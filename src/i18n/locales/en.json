@@ -60,6 +60,8 @@
     "delete": "Delete",
     "canceled": "Task canceled",
     "noTasks": "No tasks. Open a video page and click \"Create Task\".",
+    "noHistory": "No completed tasks",
+    "historyClean": "Your history is clean",
     "loadMore": "Load More"
   },
   "modal": {
@@ -169,20 +171,50 @@
     "features": {
       "privacy": {
         "title": "100% Local Privacy",
-        "description": "AI models run in your browser, your audio data is never uploaded to any server."
+        "description": "All transcription is done locally, your audio data is never uploaded to any server."
       },
       "service": {
         "title": "Local Service Setup",
-        "description": "First-time use requires installing local service and downloading model weights for offline transcription."
+        "description": "First-time use requires installing local service and downloading AI models for offline transcription."
+      },
+      "fast": {
+        "title": "Efficient Transcription",
+        "description": "Based on Whisper AI model, supports multiple languages with 95%+ accuracy"
+      },
+      "free": {
+        "title": "Completely Free",
+        "description": "Open source project, no payment required, no usage limits, unlimited transcriptions"
       }
     },
     "howToStart": {
       "title": "How to Get Started?",
       "steps": [
+        "Install local service (first-time use)",
         "Open a YouTube or Bilibili video page",
         "Click the extension icon in the browser toolbar to open the sidebar",
-        "Click the \\\"Start Recognition\\\" button (first time requires model download confirmation)"
+        "Click the \\\"Add Task\\\" button to start transcription"
       ]
+    },
+    "quickGuide": {
+      "title": "Quick Guide",
+      "install": {
+        "title": "1. Install Local Service",
+        "description": "Run installation script to auto-configure Native Host and Python environment"
+      },
+      "use": {
+        "title": "2. Start Transcription",
+        "description": "Open a page with video, create transcription task with one click, view progress in real-time"
+      },
+      "download": {
+        "title": "3. Export Text",
+        "description": "Download TXT text file after transcription is complete"
+      }
+    },
+    "support": {
+      "title": "Get Help",
+      "github": "Visit GitHub",
+      "issues": "Report Issues",
+      "star": "Give us a Star ⭐"
     },
     "footer": "You can view real-time transcription progress in the sidebar at any time."
   },
