@@ -20,4 +20,4 @@ native-host/*.zip
 native-host/host.cjs.bak
 
 # AI Session Record
-agent_session_record.md
+dist.zip

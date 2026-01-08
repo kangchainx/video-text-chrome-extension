@@ -12,8 +12,9 @@
     "nativeMessaging"
   ],
   "host_permissions": [
-    "https://www.youtube.com/*",
-    "https://www.bilibili.com/*",
+    "https://*.youtube.com/*",
+    "https://youtu.be/*",
+    "https://*.bilibili.com/*",
     "http://127.0.0.1/*"
   ],
   "background": {

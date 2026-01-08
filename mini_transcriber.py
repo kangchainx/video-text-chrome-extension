@@ -720,41 +720,20 @@ def _detect_ffmpeg() -> Optional[str]:
         _log(f"FFMPEG: Found in env var: {override}")
         return override
 
-    # 2. Check system PATH
-    import shutil
-    path_ffmpeg = shutil.which("ffmpeg")
-    if path_ffmpeg:
-        _log(f"FFMPEG: Found in PATH: {path_ffmpeg}")
-        return None  # Let yt-dlp find it in PATH
-
-    # 3. Check common macOS/Linux paths
-    candidates = [
-        "/opt/homebrew/bin/ffmpeg",
-        "/usr/local/bin/ffmpeg",
-        "/usr/bin/ffmpeg",
-        "/bin/ffmpeg",
-    ]
-    for c in candidates:
-        if os.path.exists(c) and os.access(c, os.X_OK):
-            _log(f"FFMPEG: Found in system candidate: {c}")
-            return c
-            
-    # 4. Check relative to binary (Windows/bundled)
+    # 2. Check relative to binary (Windows/bundled) - PRIORITIZED
     # Check inside 'ffmpeg' subdirectory if it exists
     bundled_dir = BASE_DIR / "ffmpeg"
-    _log(f"FFMPEG: Checking bundled dir: {bundled_dir} (exists={bundled_dir.is_dir()})")
     
     if bundled_dir.is_dir():
         for name in ["ffmpeg.exe", "ffmpeg"]:
             candidate = bundled_dir / name
             exists = candidate.is_file()
-            # _log(f"FFMPEG: Checking {candidate} -> {exists}")
             if exists:
                 if os.access(candidate, os.X_OK):
                     _log(f"FFMPEG: Found bundled in subdir: {candidate}")
                     return str(candidate)
                 else:
-                    _log(f"FFMPEG: Found bundled but NOT EXECUTABLE: {candidate}")
+                    _log(f"FFMPEG: Found bundled in subdir but NOT EXECUTABLE: {candidate}")
 
     # Check in base directory
     for name in ["ffmpeg.exe", "ffmpeg"]:
@@ -767,25 +746,105 @@ def _detect_ffmpeg() -> Optional[str]:
             else:
                  _log(f"FFMPEG: Found bundled in root but NOT EXECUTABLE: {candidate}")
 
+    # 3. Check system PATH
+    import shutil
+    path_ffmpeg = shutil.which("ffmpeg")
+    if path_ffmpeg:
+        _log(f"FFMPEG: Found in PATH: {path_ffmpeg}")
+        return None  # Let yt-dlp find it in PATH
+
+    # 4. Check common macOS/Linux paths
+    candidates = [
+        "/opt/homebrew/bin/ffmpeg",
+        "/usr/local/bin/ffmpeg",
+        "/usr/bin/ffmpeg",
+        "/bin/ffmpeg",
+    ]
+    for c in candidates:
+        if os.path.exists(c) and os.access(c, os.X_OK):
+            _log(f"FFMPEG: Found in system candidate: {c}")
+            return c
+
     _log("FFMPEG: Not found anywhere")
     return None
 
 
-def _run_yt_dlp(url: str, ydl_opts: dict, task_id: str) -> Path:
+def _run_yt_dlp(url: str, ydl_opts: Dict[str, Any], task_id: str) -> Path:
     import yt_dlp
     
-    # Inject ffmpeg location if detected and not in PATH
-    if "ffmpeg_location" not in ydl_opts:
-        ffmpeg_bin = _detect_ffmpeg()
-        if ffmpeg_bin:
-            ydl_opts["ffmpeg_location"] = ffmpeg_bin
+    # CRITICAL FIX: Handle FFMPEG_BINARY environment variable
+    # yt-dlp might use this env var directly if set, causing Broken Pipe with spaces in path
+    orig_ffmpeg_binary = os.environ.get("FFMPEG_BINARY")
+    if orig_ffmpeg_binary:
+        _log(f"DEBUG: Found FFMPEG_BINARY env var: {orig_ffmpeg_binary}")
+        # Temporarily modify env var to point to directory instead of binary
+        if os.path.isfile(orig_ffmpeg_binary):
+            ffmpeg_dir = str(Path(orig_ffmpeg_binary).parent)
+            _log(f"DEBUG: Temporarily changing FFMPEG_BINARY from {orig_ffmpeg_binary} to {ffmpeg_dir}")
+            os.environ["FFMPEG_BINARY"] = ffmpeg_dir
+        else:
+            _log(f"DEBUG: FFMPEG_BINARY is already a directory: {orig_ffmpeg_binary}")
+    
+    try:
+        # Custom logger to force-write to service.log
+        class MyLogger:
+            def debug(self, msg):
+                if not msg.startswith('[debug] '):
+                    _log(f"YTDLP_DBG: {msg}")
+                else:
+                    _log(f"{msg}")  # Already prefixed
 
-    _log(f"DEBUG: ydl_opts['ffmpeg_location'] = {ydl_opts.get('ffmpeg_location')}")
-            
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(url, download=True)
-        prepared_filename = ydl.prepare_filename(info)
-        return _resolve_audio_path(task_id, prepared_filename)
+            def info(self, msg):
+                _log(f"YTDLP_INF: {msg}")
+
+            def warning(self, msg):
+                _log(f"YTDLP_WRN: {msg}")
+
+            def error(self, msg):
+                _log(f"YTDLP_ERR: {msg}")
+
+        # Enable verbose logging and attach custom logger
+        ydl_opts["verbose"] = True
+        ydl_opts["logger"] = MyLogger()
+        
+        # Inject ffmpeg location if detected and not in PATH
+        # CRITICAL: yt-dlp expects ffmpeg_location to be a DIRECTORY, not a full path
+        # If the path contains spaces, subprocess will fail with Broken Pipe
+        _log(f"DEBUG: Before ffmpeg detection, ydl_opts keys: {list(ydl_opts.keys())}")
+        _log(f"DEBUG: 'ffmpeg_location' in ydl_opts: {'ffmpeg_location' in ydl_opts}")
+        
+        if "ffmpeg_location" not in ydl_opts:
+            _log("DEBUG: ffmpeg_location not in ydl_opts, detecting...")
+            ffmpeg_bin = _detect_ffmpeg()
+            _log(f"DEBUG: _detect_ffmpeg() returned: {ffmpeg_bin}")
+            if ffmpeg_bin:
+                # Convert full binary path to directory path
+                ffmpeg_path = Path(ffmpeg_bin)
+                ffmpeg_dir = str(ffmpeg_path.parent)
+                _log(f"DEBUG: Converting {ffmpeg_bin} -> {ffmpeg_dir}")
+                ydl_opts["ffmpeg_location"] = ffmpeg_dir
+                _log(f"FFMPEG: Setting ffmpeg_location to directory: {ffmpeg_dir}")
+        else:
+            _log(f"DEBUG: ffmpeg_location already in ydl_opts: {ydl_opts.get('ffmpeg_location')}")
+            # CRITICAL FIX: Even if ffmpeg_location is already set, we need to convert it to directory
+            existing_path = ydl_opts.get("ffmpeg_location")
+            if existing_path and os.path.isfile(existing_path):
+                _log(f"DEBUG: Existing ffmpeg_location is a file, converting to directory...")
+                ffmpeg_dir = str(Path(existing_path).parent)
+                ydl_opts["ffmpeg_location"] = ffmpeg_dir
+                _log(f"FFMPEG: Converted ffmpeg_location from file to directory: {ffmpeg_dir}")
+
+        _log(f"DEBUG: Final ydl_opts['ffmpeg_location'] = {ydl_opts.get('ffmpeg_location')}")
+                
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=True)
+            prepared_filename = ydl.prepare_filename(info)
+            return _resolve_audio_path(task_id, prepared_filename)
+    finally:
+        # Restore original environment variable
+        if orig_ffmpeg_binary:
+            os.environ["FFMPEG_BINARY"] = orig_ffmpeg_binary
+            _log(f"DEBUG: Restored FFMPEG_BINARY to: {orig_ffmpeg_binary}")
 
 
 def _download_audio(task_id: str, url: str, cookiefile: Optional[str]) -> Path:
@@ -811,6 +870,12 @@ def _download_audio(task_id: str, url: str, cookiefile: Optional[str]) -> Path:
         "progress_hooks": [progress_hook],
         "js_runtimes": {"node": {}},
         "remote_components": ["ejs:github"],
+        # YouTube 403 bypass: Use mobile clients (works better with cookies)
+        "extractor_args": {
+            "youtube": {
+                "player_client": ["android", "ios"],
+            }
+        },
         "postprocessors": [
             {
                 "key": "FFmpegExtractAudio",
