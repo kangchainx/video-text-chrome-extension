@@ -64,6 +64,8 @@
     "estimatedWait": "预计等待：{{n}} min",
     "canceled": "任务已取消",
     "noTasks": "暂无任务，打开视频页面后点击「创建转写任务」。",
+    "noHistory": "暂无已完成任务",
+    "historyClean": "您的历史记录很干净",
     "loadMore": "更多"
   },
   "modal": {
@@ -173,20 +175,50 @@
     "features": {
       "privacy": {
         "title": "100% 本地隐私",
-        "description": "AI 模型在浏览器内运行，您的音频数据永不上传至任何服务器。"
+        "description": "所有转录过程在本地完成，您的音频数据永不上传至任何服务器。"
       },
       "service": {
         "title": "本地服务说明",
-        "description": "首次使用需安装本地服务并下载模型权重，以便离线转写视频音频。"
+        "description": "首次使用需安装本地服务并下载 AI 模型，以便离线转写视频音频。"
+      },
+      "fast": {
+        "title": "高效转录",
+        "description": "基于 Whisper AI 模型，支持多语言，转录准确率高达 95%+"
+      },
+      "free": {
+        "title": "完全免费",
+        "description": "开源项目，无需付费，无使用限制，支持无限次转录"
       }
     },
     "howToStart": {
       "title": "如何开始使用？",
       "steps": [
+        "安装本地服务（首次使用）",
         "打开 YouTube 或 Bilibili 视频页面",
         "点击浏览器右上角的插件图标打开侧边栏",
-        "点击\"开始识别\"按钮（首次需确认下载模型）"
+        "点击「添加任务」按钮开始转录"
       ]
+    },
+    "quickGuide": {
+      "title": "快速指南",
+      "install": {
+        "title": "1. 安装本地服务",
+        "description": "运行安装脚本，自动配置 Native Host 和 Python 环境"
+      },
+      "use": {
+        "title": "2. 开始转录",
+        "description": "打开视频页面，一键创建转录任务，实时查看进度"
+      },
+      "download": {
+        "title": "3. 导出文本",
+        "description": "转录完成后，可以下载 TXT 文本文件"
+      }
+    },
+    "support": {
+      "title": "获取帮助",
+      "github": "访问 GitHub",
+      "issues": "报告问题",
+      "star": "给我们 Star ⭐"
     },
     "footer": "您可以随时在侧边栏查看实时转录进度。"
   },
