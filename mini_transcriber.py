@@ -952,6 +952,15 @@ def _process_task(task_id: str) -> None:
         if _is_cancelled(task_id):
             raise TaskCancelled("download canceled")
 
+        # Set model_loading flag BEFORE transcribing if model is not ready
+        # This allows frontend to show "Model loading" hint immediately
+        global model_loading, model_ready
+        if not model_ready and not model_loading:
+            with model_lock:
+                if not model_ready and not model_loading:
+                    model_loading = True
+                    _log("MODEL_LOAD_PENDING (triggered by task)")
+
         _update_task(task_id, status=TASK_STATUS_TRANSCRIBING, transcribeProgress=0)
         transcribe_start = time.monotonic()
         text = _transcribe_audio(task_id, audio_path)
