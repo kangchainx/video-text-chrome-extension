@@ -818,10 +818,16 @@ def _run_yt_dlp(url: str, ydl_opts: Dict[str, Any], task_id: str) -> Path:
             ffmpeg_bin = _detect_ffmpeg()
             _log(f"DEBUG: _detect_ffmpeg() returned: {ffmpeg_bin}")
             if ffmpeg_bin:
-                # Convert full binary path to directory path
+                # CRITICAL: Only convert to directory if it's a file path
+                # If _detect_ffmpeg() returns a directory, use it as-is
                 ffmpeg_path = Path(ffmpeg_bin)
-                ffmpeg_dir = str(ffmpeg_path.parent)
-                _log(f"DEBUG: Converting {ffmpeg_bin} -> {ffmpeg_dir}")
+                if ffmpeg_path.is_file():
+                    ffmpeg_dir = str(ffmpeg_path.parent)
+                    _log(f"DEBUG: Converting file path {ffmpeg_bin} -> directory {ffmpeg_dir}")
+                else:
+                    # Already a directory or doesn't exist, use as-is
+                    ffmpeg_dir = str(ffmpeg_path)
+                    _log(f"DEBUG: Using path as-is (directory or unknown): {ffmpeg_dir}")
                 ydl_opts["ffmpeg_location"] = ffmpeg_dir
                 _log(f"FFMPEG: Setting ffmpeg_location to directory: {ffmpeg_dir}")
         else:
