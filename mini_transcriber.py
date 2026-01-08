@@ -876,12 +876,6 @@ def _download_audio(task_id: str, url: str, cookiefile: Optional[str]) -> Path:
         "progress_hooks": [progress_hook],
         "js_runtimes": {"node": {}},
         "remote_components": ["ejs:github"],
-        # YouTube 403 bypass: Use mobile clients (works better with cookies)
-        "extractor_args": {
-            "youtube": {
-                "player_client": ["android", "ios"],
-            }
-        },
         "postprocessors": [
             {
                 "key": "FFmpegExtractAudio",
@@ -893,8 +887,23 @@ def _download_audio(task_id: str, url: str, cookiefile: Optional[str]) -> Path:
 
     try:
         opts = base_opts.copy()
-        if cookiefile and os.path.exists(cookiefile):
+        
+        # CRITICAL: android/ios clients do NOT support cookies
+        # Only use them when no cookies are provided
+        has_cookiefile = cookiefile and os.path.exists(cookiefile)
+        if has_cookiefile:
+            # Use default client when cookies are available (user is logged in)
             opts["cookiefile"] = cookiefile
+            _log(f"YTDLP: Using cookies with default client for task={task_id}")
+        else:
+            # Use mobile clients to bypass 403 when no cookies (not logged in)
+            opts["extractor_args"] = {
+                "youtube": {
+                    "player_client": ["android", "ios"],
+                }
+            }
+            _log(f"YTDLP: No cookies, using android/ios clients for task={task_id}")
+        
         return _run_yt_dlp(url, opts, task_id)
     except Exception as exc:
         raise RuntimeError(f"下载音频失败: {exc}")

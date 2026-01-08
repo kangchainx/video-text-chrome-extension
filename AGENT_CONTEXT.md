@@ -1,7 +1,8 @@
 # Project Context & State
-> Last Updated: 2026-01-08 16:37
+> Last Updated: 2026-01-08 22:28
 
-## ✅ 完成状态：YouTube 403 问题已解决 - Cookie 权限修复
+## ⚠️ 最新问题：Android/iOS 客户端与 Cookies 冲突（已修复 ✅）
+
 
 ### 问题历史
 
@@ -20,6 +21,24 @@
   - 前端虽然实现了 Cookie 自动收集功能，但由于权限限制，`chrome.cookies.getAll()` 返回空数组
   - 后端收到空的 cookies 数组后，不会创建 cookiefile，导致 yt-dlp 无法使用 cookies
   - 没有 cookies 的情况下，YouTube 会返回 403 错误
+
+#### 3. Android/iOS 客户端与 Cookies 冲突（已解决 ✅）
+- **症状**: `ERROR: [youtube] XCqFwufI_KM: Requested format is not available`
+  - 日志显示: `Skipping client "android" since it does not support cookies`
+  - 日志显示: `Skipping client "ios" since it does not support cookies`
+  - 日志显示: `Only images are available for download`
+  
+- **根本原因**:
+  - 代码在 `_download_audio()` 中硬编码了 `extractor_args: {'youtube': {'player_client': ['android', 'ios']}}`
+  - Android 和 iOS 客户端**不支持 cookies**
+  - 当用户登录并提供 cookies 时，yt-dlp 会跳过这两个客户端
+  - 结果：没有可用的客户端来下载视频，只能看到图片（缩略图）
+  
+- **修复**: 
+  - 动态配置客户端策略：
+    - **有 cookies（已登录）**：使用默认客户端（web），不设置 `player_client`
+    - **无 cookies（未登录）**：使用 `android/ios` 客户端绕过某些限制
+  - 修改位置: `mini_transcriber.py` 第 892-910 行
 
 ### 根本原因分析
 
@@ -87,6 +106,8 @@
 5. 检查是否成功下载（不再出现 403 错误）
 
 ### 下一步
-1. 重新加载 Chrome Extension 以应用 manifest.json 更改
-2. 测试 YouTube 视频下载功能
-3. 如果测试通过，提交代码到 GitHub
+1. ✅ 修复 Android/iOS 客户端与 Cookies 冲突问题
+2. ⏳ 重启服务并测试修复（服务会在下次 Chrome Extension 交互时自动重启）
+3. ⏳ 测试有 cookies 的 YouTube 视频下载
+4. ⏳ 测试无 cookies 的 YouTube 视频下载（验证降级策略）
+5. ⏳ 测试通过后提交代码到 GitHub
