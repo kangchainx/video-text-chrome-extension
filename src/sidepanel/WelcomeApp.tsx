@@ -4,7 +4,7 @@ import { RocketLaunch, ShieldCheck, DownloadSimple, CheckCircle, Lightning, Gith
 
 const GITHUB_REPO_URL = 'https://github.com/kangchainx/video-text-chrome-extension'
 
-const WelcomeApp: React.FC = () =&gt; {
+const WelcomeApp: React.FC = () => {
   const { t } = useTranslation()
 
   return (
