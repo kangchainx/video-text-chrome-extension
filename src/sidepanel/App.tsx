@@ -1013,7 +1013,6 @@ const App: React.FC = () => {
   };
 
   const handleAddTask = async () => {
-    if (guardTourAction()) return;
     setIsAdding(true);
     try {
       if (serviceStatus !== "ready") {
@@ -1657,7 +1656,7 @@ const App: React.FC = () => {
         <div className="flex items-center justify-between mb-5">
           <button
             onClick={handleAddTask}
-            disabled={serviceStatus !== "ready" || isAdding}
+            disabled={isAdding}
             ref={createButtonRef}
             className="group flex items-center gap-2 rounded-2xl bg-blue-600 px-5 py-2.5 text-white text-sm font-bold shadow-lg shadow-blue-200 disabled:opacity-50 transition-all duration-300 hover:scale-105 hover:bg-blue-700 active:scale-95"
           >
