@@ -169,7 +169,7 @@
     "serviceStopped": "已停止本地服务"
   },
   "welcome": {
-    "title": "欢迎使用视频转文字助手",
+    "title": "欢迎使用视频转文字助手 🎬",
     "subtitle": "快速、私密、高效的本地视频音频转录工具",
     "getStarted": "开始使用",
     "features": {
@@ -178,12 +178,12 @@
         "description": "所有转录过程在本地完成，您的音频数据永不上传至任何服务器。"
       },
       "service": {
-        "title": "本地服务说明",
+        "title": "一次安装，终身使用",
         "description": "首次使用需安装本地服务并下载 AI 模型，以便离线转写视频音频。"
       },
       "fast": {
         "title": "高效转录",
-        "description": "基于 Whisper AI 模型，支持多语言，转录准确率高达 95%+"
+        "description": "基于 Faster-Whisper (优化版 Whisper AI)，支持多语言，转录准确率高达 95%+"
       },
       "free": {
         "title": "完全免费",
@@ -199,28 +199,15 @@
         "点击「添加任务」按钮开始转录"
       ]
     },
-    "quickGuide": {
-      "title": "快速指南",
-      "install": {
-        "title": "1. 安装本地服务",
-        "description": "运行安装脚本，自动配置 Native Host 和 Python 环境"
-      },
-      "use": {
-        "title": "2. 开始转录",
-        "description": "打开视频页面，一键创建转录任务，实时查看进度"
-      },
-      "download": {
-        "title": "3. 导出文本",
-        "description": "转录完成后，可以下载 TXT 文本文件"
-      }
-    },
     "support": {
       "title": "获取帮助",
       "github": "访问 GitHub",
       "issues": "报告问题",
-      "star": "给我们 Star ⭐"
+      "star": "给我们 Star ⭐",
+      "docs": "查看文档",
+      "discussions": "参与讨论"
     },
-    "footer": "您可以随时在侧边栏查看实时转录进度。"
+    "footer": "现在就打开一个视频页面，开始你的第一次转录吧！🚀"
   },
   "language": {
     "zh": "中文",
