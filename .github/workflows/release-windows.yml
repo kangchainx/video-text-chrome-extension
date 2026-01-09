@@ -66,9 +66,6 @@ jobs:
               Write-Error "Could not find ffmpeg.exe in downloaded zip"
               exit 1
           }
-
-          # Bundle Uninstaller inside the ZIP
-          Copy-Item -Path "native-host/uninstall_win.bat" -Destination $StagingDir -Force
           # ------------------------------------------------
 
           # Create ZIP
@@ -81,7 +78,8 @@ jobs:
         with:
           files: |
             video-text-host-win.zip
-            native-host/install_win.bat
+            native-host/VideoTextInstaller.exe
+            native-host/uninstall_win.bat
           draft: false
           prerelease: false
         env:
