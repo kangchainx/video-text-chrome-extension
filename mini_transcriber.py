@@ -954,14 +954,8 @@ def _process_task(task_id: str) -> None:
         if _is_cancelled(task_id):
             raise TaskCancelled("download canceled")
 
-        # Set model_loading flag BEFORE transcribing if model is not ready
-        # This allows frontend to show "Model loading" hint immediately
-        global model_loading, model_ready
-        if not model_ready and not model_loading:
-            with model_lock:
-                if not model_ready and not model_loading:
-                    model_loading = True
-                    _log("MODEL_LOAD_PENDING (triggered by task)")
+        # _get_whisper_model() will handle setting model_loading=True and loading the model safely
+        # We don't need to manually set it here, which caused a deadlock (self-waiting)
 
         _update_task(task_id, status=TASK_STATUS_TRANSCRIBING, transcribeProgress=0)
         transcribe_start = time.monotonic()
