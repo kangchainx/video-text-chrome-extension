@@ -1079,6 +1079,8 @@ const App: React.FC = () => {
       setFilter("active"); // 成功创建后立马切换到进行中标签页
       await refreshTasks();
     } catch (error: any) {
+      // Silently ignore tour_active error to avoid confusing error messages during auto tour
+      if (error?.message === "tour_active") return;
       showToast("error", error.message || t("errors.addTaskFailed"));
     } finally {
       setIsAdding(false);
@@ -1446,7 +1448,7 @@ const App: React.FC = () => {
               onClick={
                 serviceStatus === "ready"
                   ? handleStopService
-                  : () => ensureService()
+                  : () => ensureService().catch(() => undefined)
               }
               title={
                 serviceStatus === "ready"
