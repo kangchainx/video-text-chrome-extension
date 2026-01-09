@@ -25,6 +25,20 @@ NC='\033[0m'
 
 echo -e "${BLUE}=== VideoText Native Host Installer (macOS) ===${NC}"
 
+# Check for existing installation
+if [ -d "$INSTALL_DIR" ]; then
+    echo -e "\n${YELLOW}⚠️  Existing installation found at:${NC} $INSTALL_DIR"
+    echo "This may contain cached models and temp files."
+    read -p "Do you want to reinstall and clear previous data? [y/N] " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        echo "Installation canceled by user."
+        exit 1
+    fi
+    echo -e "${YELLOW}Removing existing installation...${NC}"
+    rm -rf "$INSTALL_DIR"
+fi
+
 # 1. Prepare installation directory
 echo -e "\n${YELLOW}[1/5] Preparing installation directory...${NC}"
 mkdir -p "$INSTALL_DIR"
