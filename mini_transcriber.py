@@ -16,7 +16,17 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
-CPU_THREADS = int(os.getenv("TRANSCRIBER_CPU_THREADS", "2"))
+# Default to 4 threads for better performance, or limited by system cores
+default_threads = "4"
+if hasattr(os, "cpu_count"):
+    try:
+        # Use roughly half of logical cores, clamped between 2 and 8
+        cores = os.cpu_count() or 4
+        default_threads = str(max(2, min(8, cores // 2)))
+    except Exception:
+        pass
+
+CPU_THREADS = int(os.getenv("TRANSCRIBER_CPU_THREADS", default_threads))
 os.environ.setdefault("OMP_NUM_THREADS", str(CPU_THREADS))
 os.environ.setdefault("MKL_NUM_THREADS", str(CPU_THREADS))
 os.environ.setdefault("OPENBLAS_NUM_THREADS", str(CPU_THREADS))
