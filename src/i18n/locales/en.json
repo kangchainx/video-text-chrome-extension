@@ -165,7 +165,7 @@
     "serviceStopped": "Service stopped"
   },
   "welcome": {
-    "title": "Welcome to Video Text Assistant",
+    "title": "Welcome to Video Text Assistant 🎬",
     "subtitle": "Fast, private, and efficient local video audio transcription tool",
     "getStarted": "Get Started",
     "features": {
@@ -174,12 +174,12 @@
         "description": "All transcription is done locally, your audio data is never uploaded to any server."
       },
       "service": {
-        "title": "Local Service Setup",
+        "title": "Install Once, Use Forever",
         "description": "First-time use requires installing local service and downloading AI models for offline transcription."
       },
       "fast": {
         "title": "Efficient Transcription",
-        "description": "Based on Whisper AI model, supports multiple languages with 95%+ accuracy"
+        "description": "Based on Faster-Whisper (optimized Whisper AI), supports multiple languages with 95%+ accuracy"
       },
       "free": {
         "title": "Completely Free",
@@ -191,32 +191,19 @@
       "steps": [
         "Install local service (first-time use)",
         "Open a YouTube or Bilibili video page",
-        "Click the extension icon in the browser toolbar to open the sidebar",
-        "Click the \\\"Add Task\\\" button to start transcription"
+        "Open sidebar via extension icon",
+        "Click \"Add Task\" to start transcription"
       ]
-    },
-    "quickGuide": {
-      "title": "Quick Guide",
-      "install": {
-        "title": "1. Install Local Service",
-        "description": "Run installation script to auto-configure Native Host and Python environment"
-      },
-      "use": {
-        "title": "2. Start Transcription",
-        "description": "Open a page with video, create transcription task with one click, view progress in real-time"
-      },
-      "download": {
-        "title": "3. Export Text",
-        "description": "Download TXT text file after transcription is complete"
-      }
     },
     "support": {
       "title": "Get Help",
       "github": "Visit GitHub",
       "issues": "Report Issues",
-      "star": "Give us a Star ⭐"
+      "star": "Give us a Star ⭐",
+      "docs": "Documentation",
+      "discussions": "Discussions"
     },
-    "footer": "You can view real-time transcription progress in the sidebar at any time."
+    "footer": "Open a video page now and start your first transcription! 🚀"
   },
   "language": {
     "zh": "中文",

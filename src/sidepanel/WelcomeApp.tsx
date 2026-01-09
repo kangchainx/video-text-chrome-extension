@@ -1,6 +1,6 @@
 import React from 'react'
 import { useTranslation } from 'react-i18next'
-import { RocketLaunch, ShieldCheck, DownloadSimple, CheckCircle, Lightning, GithubLogo, GitBranch, Star } from 'phosphor-react'
+import { ShieldCheck, Desktop, CheckCircle, Lightning, GithubLogo, GitBranch, Star, Book, ChatCircleDots } from 'phosphor-react'
 
 const GITHUB_REPO_URL = 'https://github.com/kangchainx/video-text-chrome-extension'
 
@@ -9,11 +9,15 @@ const WelcomeApp: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-slate-100 flex items-center justify-center p-6 font-sans antialiased text-slate-800">
-      <div className="max-w-3xl w-full bg-white/90 backdrop-blur-xl rounded-[2rem] shadow-2xl shadow-indigo-200/50 p-12 border border-white/40 animate-fade-in-up">
-        {/* Header with animated icon */}
+      <div className="max-w-3xl w-full bg-white/90 backdrop-blur-xl rounded-[2rem] shadow-2xl shadow-indigo-200/50 p-6 md:p-12 border border-white/40 animate-fade-in-up">
+        {/* Header with animated logo */}
         <header className="text-center mb-12">
-          <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-tr from-indigo-600 to-violet-500 rounded-3xl shadow-lg shadow-indigo-300 mb-6 animate-bounce-gentle">
-             <RocketLaunch size={40} weight="duotone" className="text-white animate-float" />
+          <div className="inline-flex items-center justify-center w-20 h-20 mb-6 animate-bounce-gentle">
+             <img
+               src="/logos/logo.png"
+               alt="Video Text Assistant Logo"
+               className="w-20 h-20 rounded-2xl shadow-lg shadow-indigo-300 animate-float"
+             />
           </div>
           <h1 className="text-4xl font-extrabold tracking-tight mb-4 bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 to-violet-600 animate-fade-in">
             {t('welcome.title')}
@@ -33,7 +37,7 @@ const WelcomeApp: React.FC = () => {
 
           <div className="feature-card p-6 rounded-2xl bg-gradient-to-br from-slate-50 to-white border border-slate-100 hover:shadow-xl hover:scale-105 transition-all duration-300 group animate-slide-in" style={{ animationDelay: '0.2s' }}>
              <div className="w-12 h-12 bg-gradient-to-br from-violet-100 to-violet-200 rounded-xl shadow-sm flex items-center justify-center mb-4 group-hover:scale-110 group-hover:rotate-6 transition-all duration-300">
-                <DownloadSimple size={26} weight="duotone" className="text-violet-600" />
+                <Desktop size={26} weight="duotone" className="text-violet-600" />
              </div>
              <h3 className="text-lg font-bold mb-2">{t('welcome.features.service.title')}</h3>
              <p className="text-slate-500 text-sm leading-relaxed">{t('welcome.features.service.description')}</p>
@@ -98,8 +102,17 @@ const WelcomeApp: React.FC = () => {
               rel="noopener noreferrer"
               className="inline-flex items-center gap-2 px-4 py-2 bg-white text-slate-900 rounded-xl font-semibold text-sm hover:bg-slate-100 transition-all duration-200 hover:scale-105 shadow-sm"
             >
-              <GithubLogo size={18} weight="fill" />
-              {t('welcome.support.github')}
+              <Star size={18} weight="fill" />
+              {t('welcome.support.star')}
+            </a>
+            <a
+              href={`${GITHUB_REPO_URL}#readme`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 px-4 py-2 bg-slate-700 text-white rounded-xl font-semibold text-sm hover:bg-slate-600 transition-all duration-200 hover:scale-105 border border-slate-600"
+            >
+              <Book size={18} weight="duotone" />
+              {t('welcome.support.docs')}
             </a>
             <a
               href={`${GITHUB_REPO_URL}/issues`}
@@ -109,6 +122,15 @@ const WelcomeApp: React.FC = () => {
             >
               <GitBranch size={18} />
               {t('welcome.support.issues')}
+            </a>
+            <a
+              href={`${GITHUB_REPO_URL}/discussions`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 px-4 py-2 bg-slate-700 text-white rounded-xl font-semibold text-sm hover:bg-slate-600 transition-all duration-200 hover:scale-105 border border-slate-600"
+            >
+              <ChatCircleDots size={18} weight="duotone" />
+              {t('welcome.support.discussions')}
             </a>
           </div>
         </section>

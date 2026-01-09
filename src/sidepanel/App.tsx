@@ -1013,7 +1013,6 @@ const App: React.FC = () => {
   };
 
   const handleAddTask = async () => {
-    if (guardTourAction()) return;
     setIsAdding(true);
     try {
       if (serviceStatus !== "ready") {
@@ -1080,6 +1079,8 @@ const App: React.FC = () => {
       setFilter("active"); // 成功创建后立马切换到进行中标签页
       await refreshTasks();
     } catch (error: any) {
+      // Silently ignore tour_active error to avoid confusing error messages during auto tour
+      if (error?.message === "tour_active") return;
       showToast("error", error.message || t("errors.addTaskFailed"));
     } finally {
       setIsAdding(false);
@@ -1447,7 +1448,7 @@ const App: React.FC = () => {
               onClick={
                 serviceStatus === "ready"
                   ? handleStopService
-                  : () => ensureService()
+                  : () => ensureService().catch(() => undefined)
               }
               title={
                 serviceStatus === "ready"
@@ -1657,7 +1658,7 @@ const App: React.FC = () => {
         <div className="flex items-center justify-between mb-5">
           <button
             onClick={handleAddTask}
-            disabled={serviceStatus !== "ready" || isAdding}
+            disabled={isAdding}
             ref={createButtonRef}
             className="group flex items-center gap-2 rounded-2xl bg-blue-600 px-5 py-2.5 text-white text-sm font-bold shadow-lg shadow-blue-200 disabled:opacity-50 transition-all duration-300 hover:scale-105 hover:bg-blue-700 active:scale-95"
           >

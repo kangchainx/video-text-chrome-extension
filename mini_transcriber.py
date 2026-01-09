@@ -776,23 +776,25 @@ def _run_yt_dlp(url: str, ydl_opts: Dict[str, Any], task_id: str) -> Path:
     # yt-dlp might use this env var directly if set, causing Broken Pipe with spaces in path
     orig_ffmpeg_binary = os.environ.get("FFMPEG_BINARY")
     if orig_ffmpeg_binary:
-        _log(f"DEBUG: Found FFMPEG_BINARY env var: {orig_ffmpeg_binary}")
+        # _log(f"DEBUG: Found FFMPEG_BINARY env var: {orig_ffmpeg_binary}")
         # Temporarily modify env var to point to directory instead of binary
         if os.path.isfile(orig_ffmpeg_binary):
             ffmpeg_dir = str(Path(orig_ffmpeg_binary).parent)
-            _log(f"DEBUG: Temporarily changing FFMPEG_BINARY from {orig_ffmpeg_binary} to {ffmpeg_dir}")
+            # _log(f"DEBUG: Temporarily changing FFMPEG_BINARY from {orig_ffmpeg_binary} to {ffmpeg_dir}")
             os.environ["FFMPEG_BINARY"] = ffmpeg_dir
         else:
-            _log(f"DEBUG: FFMPEG_BINARY is already a directory: {orig_ffmpeg_binary}")
+            pass
+            # _log(f"DEBUG: FFMPEG_BINARY is already a directory: {orig_ffmpeg_binary}")
     
     try:
         # Custom logger to force-write to service.log
         class MyLogger:
             def debug(self, msg):
-                if not msg.startswith('[debug] '):
-                    _log(f"YTDLP_DBG: {msg}")
-                else:
-                    _log(f"{msg}")  # Already prefixed
+                # if not msg.startswith('[debug] '):
+                #     _log(f"YTDLP_DBG: {msg}")
+                # else:
+                #     _log(f"{msg}")  # Already prefixed
+                pass
 
             def info(self, msg):
                 _log(f"YTDLP_INF: {msg}")
@@ -804,43 +806,43 @@ def _run_yt_dlp(url: str, ydl_opts: Dict[str, Any], task_id: str) -> Path:
                 _log(f"YTDLP_ERR: {msg}")
 
         # Enable verbose logging and attach custom logger
-        ydl_opts["verbose"] = True
+        # ydl_opts["verbose"] = True  # Disabled to reduce log noise
         ydl_opts["logger"] = MyLogger()
         
         # Inject ffmpeg location if detected and not in PATH
         # CRITICAL: yt-dlp expects ffmpeg_location to be a DIRECTORY, not a full path
         # If the path contains spaces, subprocess will fail with Broken Pipe
-        _log(f"DEBUG: Before ffmpeg detection, ydl_opts keys: {list(ydl_opts.keys())}")
-        _log(f"DEBUG: 'ffmpeg_location' in ydl_opts: {'ffmpeg_location' in ydl_opts}")
-        
+        # _log(f"DEBUG: Before ffmpeg detection, ydl_opts keys: {list(ydl_opts.keys())}")
+        # _log(f"DEBUG: 'ffmpeg_location' in ydl_opts: {'ffmpeg_location' in ydl_opts}")
+
         if "ffmpeg_location" not in ydl_opts:
-            _log("DEBUG: ffmpeg_location not in ydl_opts, detecting...")
+            # _log("DEBUG: ffmpeg_location not in ydl_opts, detecting...")
             ffmpeg_bin = _detect_ffmpeg()
-            _log(f"DEBUG: _detect_ffmpeg() returned: {ffmpeg_bin}")
+            # _log(f"DEBUG: _detect_ffmpeg() returned: {ffmpeg_bin}")
             if ffmpeg_bin:
                 # CRITICAL: Only convert to directory if it's a file path
                 # If _detect_ffmpeg() returns a directory, use it as-is
                 ffmpeg_path = Path(ffmpeg_bin)
                 if ffmpeg_path.is_file():
                     ffmpeg_dir = str(ffmpeg_path.parent)
-                    _log(f"DEBUG: Converting file path {ffmpeg_bin} -> directory {ffmpeg_dir}")
+                    # _log(f"DEBUG: Converting file path {ffmpeg_bin} -> directory {ffmpeg_dir}")
                 else:
                     # Already a directory or doesn't exist, use as-is
                     ffmpeg_dir = str(ffmpeg_path)
-                    _log(f"DEBUG: Using path as-is (directory or unknown): {ffmpeg_dir}")
+                    # _log(f"DEBUG: Using path as-is (directory or unknown): {ffmpeg_dir}")
                 ydl_opts["ffmpeg_location"] = ffmpeg_dir
                 _log(f"FFMPEG: Setting ffmpeg_location to directory: {ffmpeg_dir}")
         else:
-            _log(f"DEBUG: ffmpeg_location already in ydl_opts: {ydl_opts.get('ffmpeg_location')}")
+            # _log(f"DEBUG: ffmpeg_location already in ydl_opts: {ydl_opts.get('ffmpeg_location')}")
             # CRITICAL FIX: Even if ffmpeg_location is already set, we need to convert it to directory
             existing_path = ydl_opts.get("ffmpeg_location")
             if existing_path and os.path.isfile(existing_path):
-                _log(f"DEBUG: Existing ffmpeg_location is a file, converting to directory...")
+                # _log(f"DEBUG: Existing ffmpeg_location is a file, converting to directory...")
                 ffmpeg_dir = str(Path(existing_path).parent)
                 ydl_opts["ffmpeg_location"] = ffmpeg_dir
                 _log(f"FFMPEG: Converted ffmpeg_location from file to directory: {ffmpeg_dir}")
 
-        _log(f"DEBUG: Final ydl_opts['ffmpeg_location'] = {ydl_opts.get('ffmpeg_location')}")
+        # _log(f"DEBUG: Final ydl_opts['ffmpeg_location'] = {ydl_opts.get('ffmpeg_location')}")
                 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
@@ -850,7 +852,7 @@ def _run_yt_dlp(url: str, ydl_opts: Dict[str, Any], task_id: str) -> Path:
         # Restore original environment variable
         if orig_ffmpeg_binary:
             os.environ["FFMPEG_BINARY"] = orig_ffmpeg_binary
-            _log(f"DEBUG: Restored FFMPEG_BINARY to: {orig_ffmpeg_binary}")
+            # _log(f"DEBUG: Restored FFMPEG_BINARY to: {orig_ffmpeg_binary}")
 
 
 def _download_audio(task_id: str, url: str, cookiefile: Optional[str]) -> Path:
