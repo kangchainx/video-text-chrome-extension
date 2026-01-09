@@ -86,8 +86,7 @@ cp -R "${DIST_DIR}/video-text-transcriber" "${STAGING_DIR}/"
 # Copy helper scripts from native-host/
 cp "${HOST_DIR}/host-macos.sh" "${STAGING_DIR}/"
 cp "${HOST_DIR}/host.cjs" "${STAGING_DIR}/"
-cp "${HOST_DIR}/uninstall_mac.sh" "${STAGING_DIR}/"
-cp "${HOST_DIR}/uninstall_win.bat" "${STAGING_DIR}/"
+cp "${HOST_DIR}/host.cjs" "${STAGING_DIR}/"
 
 # Write Extension ID
 echo "${EXTENSION_ID}" > "${STAGING_DIR}/extension-id.txt"

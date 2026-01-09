@@ -120,6 +120,7 @@ jobs:
           files: |
             video-text-host-macos.zip
             install_mac.sh
+            native-host/uninstall_mac.sh
           draft: false
           prerelease: false
         env:
