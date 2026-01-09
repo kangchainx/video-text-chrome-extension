@@ -1,6 +1,6 @@
 import React from 'react'
 import { useTranslation } from 'react-i18next'
-import { RocketLaunch, ShieldCheck, Desktop, CheckCircle, Lightning, GithubLogo, GitBranch, Star, Book, ChatCircleDots } from 'phosphor-react'
+import { ShieldCheck, Desktop, CheckCircle, Lightning, GithubLogo, GitBranch, Star, Book, ChatCircleDots } from 'phosphor-react'
 
 const GITHUB_REPO_URL = 'https://github.com/kangchainx/video-text-chrome-extension'
 
@@ -10,10 +10,14 @@ const WelcomeApp: React.FC = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-slate-100 flex items-center justify-center p-6 font-sans antialiased text-slate-800">
       <div className="max-w-3xl w-full bg-white/90 backdrop-blur-xl rounded-[2rem] shadow-2xl shadow-indigo-200/50 p-6 md:p-12 border border-white/40 animate-fade-in-up">
-        {/* Header with animated icon */}
+        {/* Header with animated logo */}
         <header className="text-center mb-12">
-          <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-tr from-indigo-600 to-violet-500 rounded-3xl shadow-lg shadow-indigo-300 mb-6 animate-bounce-gentle">
-             <RocketLaunch size={40} weight="duotone" className="text-white animate-float" />
+          <div className="inline-flex items-center justify-center w-20 h-20 mb-6 animate-bounce-gentle">
+             <img
+               src="/logos/logo.png"
+               alt="Video Text Assistant Logo"
+               className="w-20 h-20 rounded-2xl shadow-lg shadow-indigo-300 animate-float"
+             />
           </div>
           <h1 className="text-4xl font-extrabold tracking-tight mb-4 bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 to-violet-600 animate-fade-in">
             {t('welcome.title')}
