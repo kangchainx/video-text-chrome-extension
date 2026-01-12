@@ -6,7 +6,6 @@
   "permissions": [
     "sidePanel",
     "activeTab",
-    "storage",
     "downloads",
     "cookies",
     "nativeMessaging"

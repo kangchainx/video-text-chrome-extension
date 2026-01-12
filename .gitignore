@@ -21,3 +21,9 @@ native-host/host.cjs.bak
 
 # AI Session Record
 dist.zip
+
+# User Guides (for local reference only)
+RESUBMISSION_GUIDE.md
+
+# Extension Packages
+*.zip
