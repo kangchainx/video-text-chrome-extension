@@ -117,6 +117,23 @@ This project uses a hybrid architecture to combine the convenience of a browser 
 - [ ] **Batch Processing**: Support for transcribing multiple videos at once.
 - [ ] **Custom Model Selection**: Allow users to choose between different Whisper model sizes (base/small/medium).
 
+## Privacy & Data Protection
+
+🔒 **Your privacy matters**. This extension:
+- ✅ Processes all data **locally** on your machine
+- ✅ **Never uploads** video content or transcripts to any cloud server
+- ✅ Only uses cookies to access high-quality videos you're already authorized to view
+- ✅ Does not collect analytics, tracking data, or personal information
+
+For full details, see our [Privacy Policy](PRIVACY.md).
+
+---
+
 ## Contributing
 
 Pull requests are welcome! Please make sure to update tests as appropriate.
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
