@@ -94,6 +94,38 @@ python mini_transcriber.py
 
 ---
 
+## 📝 Version History
+
+### v1.0.1 (2026-01-15)
+
+**✨ New Features**
+- Add manual native host recheck functionality
+- Automatically disable "Add Task" button when native host not installed
+- Add "Recheck" button in installation guide panel
+
+**🚀 Performance Improvements**
+- Remove 10-second startup overlay delay, close immediately when service is ready
+- Optimize native host detection flow with early check on component mount
+- Fix overlay state control logic to properly handle all service states
+
+**💡 UX Enhancements**
+- Optimize onboarding tour timing, only start after service ready and overlay closed
+- Remove click interaction from service status badge, simplify to display-only component
+- Clearer installation status prompts and error feedback
+
+**🐛 Bug Fixes**
+- Fix service connection issue on first launch
+- Fix overlay control logic for 'starting' state
+- Clean up debug code to reduce console output
+
+### v1.0.0 (2026-01-XX)
+- Initial release
+- Basic video-to-text transcription
+- Support for YouTube and Bilibili
+- Local AI transcription (Faster-Whisper)
+
+---
+
 ## Architecture
 
 This project uses a hybrid architecture to combine the convenience of a browser extension with the power of native code.
