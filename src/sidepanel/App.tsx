@@ -129,6 +129,7 @@ const App: React.FC = () => {
   const [modelCached, setModelCached] = useState<boolean | null>(null);
   const [modelReady, setModelReady] = useState<boolean | null>(null);
   const [modelLoading, setModelLoading] = useState<boolean | null>(null);
+  const [nativeHostInstalled, setNativeHostInstalled] = useState<boolean | null>(null);
   const [overlayVisible, setOverlayVisible] = useState(true);
   const [overlayHiding, setOverlayHiding] = useState(false);
   const [tasks, setTasks] = useState<TaskItem[]>([]);
@@ -158,14 +159,7 @@ const App: React.FC = () => {
   const [diagnosticRunId, setDiagnosticRunId] = useState(0);
   const [pendingCancel, setPendingCancel] = useState<TaskItem | null>(null);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
-  const [tourMode, setTourMode] = useState<"auto" | "manual" | null>(() => {
-    try {
-      const seen = window.localStorage.getItem("video_text_onboarding");
-      return seen ? null : "auto";
-    } catch {
-      return "auto";
-    }
-  });
+  const [tourMode, setTourMode] = useState<"auto" | "manual" | null>(null);
   const [tourStep, setTourStep] = useState(0);
   const [tourClipPath, setTourClipPath] = useState(
     "polygon(0 0, 100% 0, 100% 100%, 0 100%, 0 0)"
@@ -331,6 +325,25 @@ const App: React.FC = () => {
     return () => window.cancelAnimationFrame(raf);
   }, [progressTarget]);
 
+  // 在服务ready且overlay关闭后启动新手引导
+  useEffect(() => {
+    // 只在首次检查时执行
+    if (tourMode !== null) return;
+    
+    // 必须满足：服务已ready + overlay已关闭
+    if (serviceStatus !== "ready" || overlayVisible) return;
+    
+    // 检查是否已经看过引导
+    try {
+      const seen = window.localStorage.getItem("video_text_onboarding");
+      if (!seen) {
+        setTourMode("auto");
+      }
+    } catch {
+      // localStorage not available
+    }
+  }, [tourMode, serviceStatus, overlayVisible]);
+
   useEffect(() => {
     if (tourMode !== "auto") return;
     try {
@@ -451,11 +464,47 @@ const App: React.FC = () => {
     };
   }, []);
 
+  // 组件挂载时初始化overlay并检查native host
   useEffect(() => {
     overlayStartRef.current = Date.now();
     overlayLockedRef.current = true;
     setOverlayVisible(true);
     setOverlayHiding(false);
+
+    // 复用WelcomeApp的检查逻辑：检查native host是否已安装
+    const checkNativeHost = async () => {
+      try {
+        await new Promise<void>((resolve, reject) => {
+          chrome.runtime.sendNativeMessage(
+            NATIVE_HOST_NAME,
+            { type: 'getStatus' },
+            (response) => {
+              if (chrome.runtime.lastError) {
+                reject(new Error(chrome.runtime.lastError.message));
+                return;
+              }
+              if (response?.ok) {
+                resolve();
+              } else {
+                reject(new Error('Native host not responding'));
+              }
+            }
+          );
+        });
+        setNativeHostInstalled(true);
+      } catch (error: any) {
+        setNativeHostInstalled(false);
+        // 未安装：立即关闭遮罩并设置错误状态
+        setServiceStatus('error');
+        setServiceError('nativeHostNotInstalled');
+        setAutoConnectEnabled(false);
+        hideOverlay(0);
+      }
+    };
+
+    // 延迟500ms检查，避免UI闪烁
+    const timer = setTimeout(checkNativeHost, 500);
+    return () => clearTimeout(timer);
   }, []);
 
   // Note: Removed the tourMode auto-hide logic here
@@ -744,17 +793,10 @@ const App: React.FC = () => {
     if (tourMode === "auto") return;
     if (!autoConnectEnabled) return;
     if (serviceStatus !== "idle") return;
+    // 只有在native host已安装的情况下才自动连接
+    if (nativeHostInstalled !== true) return;
     ensureService(false).catch((error) => {
-      // Check if Native Host is not installed
-      const errorMsg = error?.message || '';
-      if (errorMsg.includes('Specified native messaging host not found') ||
-          errorMsg.includes('native_error')) {
-        setServiceError('nativeHostNotInstalled');
-        // Immediately hide overlay for Native Host not installed error
-        setOverlayVisible(false);
-        setOverlayHiding(false);
-        overlayLockedRef.current = false;
-      }
+      console.error('[App] Auto-connect failed:', error);
     });
     return () => {
       if (sseRef.current) {
@@ -764,7 +806,7 @@ const App: React.FC = () => {
         window.clearTimeout(reconnectTimerRef.current);
       }
     };
-  }, [tourMode, serviceStatus, autoConnectEnabled]);
+  }, [tourMode, serviceStatus, autoConnectEnabled, nativeHostInstalled]);
 
   useEffect(() => {
     if (serviceStatus !== "ready") return;
@@ -885,20 +927,23 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (!overlayLockedRef.current) return;
+    
+    // 发生错误：立即关闭遮罩
     if (serviceStatus === "error") {
       hideOverlay(0);
       return;
     }
-    if (serviceStatus !== "ready" && serviceStatus !== "starting") {
-      setOverlayVisible(true);
-      setOverlayHiding(false);
+    
+    // 服务已ready：立即关闭遮罩
+    if (serviceStatus === "ready") {
+      hideOverlay(0);
       return;
     }
-    if (modelCached === null) return;
-    const elapsed = Date.now() - overlayStartRef.current;
-    const delayMs = modelCached ? 0 : Math.max(0, 10000 - elapsed);
-    hideOverlay(delayMs);
-  }, [serviceStatus, modelCached]);
+    
+    // 其他状态（idle, connecting, starting）：显示遮罩
+    setOverlayVisible(true);
+    setOverlayHiding(false);
+  }, [serviceStatus]);
 
   useEffect(() => {
     const inProgress = tasksWithDisplay.filter((task) =>
@@ -1021,6 +1066,39 @@ const App: React.FC = () => {
     if (tourMode !== "auto") return false;
     showToast("info", t("tour.completeFirst"));
     return true;
+  };
+
+  const recheckNativeHost = async () => {
+    setNativeHostInstalled(null);
+    try {
+      await new Promise<void>((resolve, reject) => {
+        chrome.runtime.sendNativeMessage(
+          NATIVE_HOST_NAME,
+          { type: 'getStatus' },
+          (response) => {
+            if (chrome.runtime.lastError) {
+              reject(new Error(chrome.runtime.lastError.message));
+              return;
+            }
+            if (response?.ok) {
+              resolve();
+            } else {
+              reject(new Error('Native host not responding'));
+            }
+          }
+        );
+      });
+      setNativeHostInstalled(true);
+      setServiceStatus('idle');
+      setServiceError(null);
+      setAutoConnectEnabled(true);
+      showToast('success', t('welcome.installation.installed'));
+    } catch (error: any) {
+      setNativeHostInstalled(false);
+      setServiceStatus('error');
+      setServiceError('nativeHostNotInstalled');
+      showToast('error', t('errors.nativeHostNotInstalled'));
+    }
   };
 
   const handleAddTask = async () => {
@@ -1449,23 +1527,13 @@ const App: React.FC = () => {
             {/* Live Indicator implementing original service logic visually */}
             <div
               ref={serviceBadgeRef}
-              className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold tracking-wide transition-all cursor-pointer select-none ${
+              className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold tracking-wide transition-all select-none ${
                 serviceStatus === "ready"
                   ? "bg-emerald-100 text-emerald-700"
                   : serviceStatus === "error"
                   ? "bg-rose-100 text-rose-700"
                   : "bg-slate-100 text-slate-500"
               }`}
-              onClick={
-                serviceStatus === "ready"
-                  ? handleStopService
-                  : () => ensureService().catch(() => undefined)
-              }
-              title={
-                serviceStatus === "ready"
-                  ? t("service.stop")
-                  : t("service.connecting")
-              }
             >
               <div className="relative flex h-2 w-2">
                 {serviceStatus === "ready" && (
@@ -1535,15 +1603,25 @@ const App: React.FC = () => {
                 {t("welcome.installation.notInstalledMessage")}
               </p>
 
-              <button
-                onClick={() => {
-                  chrome.tabs.create({ url: chrome.runtime.getURL('welcome.html') });
-                }}
-                className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-orange-500 to-rose-500 px-6 py-3 text-white text-sm font-bold transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl hover:scale-105"
-              >
-                <Download size={18} weight="bold" />
-                {t("welcome.installation.openGuide")}
-              </button>
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={() => {
+                    chrome.tabs.create({ url: chrome.runtime.getURL('welcome.html') });
+                  }}
+                  className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-orange-500 to-rose-500 px-6 py-3 text-white text-sm font-bold transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl hover:scale-105"
+                >
+                  <Download size={18} weight="bold" />
+                  {t("welcome.installation.openGuide")}
+                </button>
+                
+                <button
+                  onClick={recheckNativeHost}
+                  className="inline-flex items-center gap-2 rounded-full border-2 border-orange-500 bg-white px-6 py-3 text-orange-500 text-sm font-bold transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl hover:scale-105 hover:bg-orange-50"
+                >
+                  <ArrowClockwise size={18} weight="bold" />
+                  {t("welcome.installation.recheckNativeHost")}
+                </button>
+              </div>
 
               <div className="mt-6 pt-6 border-t border-orange-200 w-full max-w-md">
                 <p className="text-xs font-semibold text-slate-700 mb-3">
@@ -1716,9 +1794,9 @@ const App: React.FC = () => {
         <div className="flex items-center justify-between mb-5">
           <button
             onClick={handleAddTask}
-            disabled={isAdding}
+            disabled={isAdding || nativeHostInstalled === false}
             ref={createButtonRef}
-            className="group flex items-center gap-2 rounded-2xl bg-blue-600 px-5 py-2.5 text-white text-sm font-bold shadow-lg shadow-blue-200 disabled:opacity-50 transition-all duration-300 hover:scale-105 hover:bg-blue-700 active:scale-95"
+            className="group flex items-center gap-2 rounded-2xl bg-blue-600 px-5 py-2.5 text-white text-sm font-bold shadow-lg shadow-blue-200 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 hover:scale-105 hover:bg-blue-700 active:scale-95"
           >
             {isAdding ? (
               <ArrowClockwise size={16} className="animate-spin" />
