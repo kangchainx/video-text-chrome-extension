@@ -226,7 +226,8 @@
       "whyNeeded": "为什么需要本地服务？",
       "reason1": "突破浏览器限制，下载视频音频",
       "reason2": "使用本地 AI 模型进行转录",
-      "reason3": "保护隐私，所有数据不上传云端"
+      "reason3": "保护隐私，所有数据不上传云端",
+      "recheckNativeHost": "重新检测"
     },
     "howToStart": {
       "title": "如何开始使用？",

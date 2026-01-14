@@ -222,7 +222,8 @@
       "whyNeeded": "Why is the native service needed?",
       "reason1": "Bypass browser limitations to download video audio",
       "reason2": "Use local AI models for transcription",
-      "reason3": "Protect privacy - all data stays local"
+      "reason3": "Protect privacy - all data stays local",
+      "recheckNativeHost": "Recheck"
     },
     "howToStart": {
       "title": "How to Get Started?",
