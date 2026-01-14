@@ -11,6 +11,7 @@ native-host/macos-pkg/build
 .vscode
 CLAUDE.md
 .claude
+AGENT_CONTEXT.md
 
 # Native Host Refactoring & Build Artifacts
 native-host/build/
