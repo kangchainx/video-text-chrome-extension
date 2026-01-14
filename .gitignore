@@ -6,6 +6,7 @@ __pycache__
 downloads
 dist
 temp
+check-extension-id.html
 native-host/VideoTextHost.pkg
 native-host/macos-pkg/build
 .vscode
