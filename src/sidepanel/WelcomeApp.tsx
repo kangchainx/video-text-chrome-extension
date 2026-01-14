@@ -36,25 +36,34 @@ const WelcomeApp: React.FC = () => {
   useEffect(() => {
     const checkInstallation = async () => {
       try {
+        console.log('[WelcomeApp] Checking native host installation...')
+        console.log('[WelcomeApp] Native host name:', NATIVE_HOST_NAME)
+        console.log('[WelcomeApp] Extension ID:', chrome.runtime.id)
+
         await new Promise<void>((resolve, reject) => {
           chrome.runtime.sendNativeMessage(
             NATIVE_HOST_NAME,
             { type: 'getStatus' },
             (response) => {
               if (chrome.runtime.lastError) {
+                console.error('[WelcomeApp] Native messaging error:', chrome.runtime.lastError.message)
                 reject(new Error(chrome.runtime.lastError.message))
                 return
               }
+              console.log('[WelcomeApp] Native host response:', response)
               if (response?.ok) {
+                console.log('[WelcomeApp] Native host installed and responding')
                 resolve()
               } else {
+                console.error('[WelcomeApp] Native host not responding properly:', response)
                 reject(new Error('Native host not responding'))
               }
             }
           )
         })
         setInstallStatus('installed')
-      } catch (error) {
+      } catch (error: any) {
+        console.error('[WelcomeApp] Installation check failed:', error.message)
         setInstallStatus('notInstalled')
       }
     }

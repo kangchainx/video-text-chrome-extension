@@ -105,11 +105,67 @@ python mini_transcriber.py
     -   `faster-whisper`：用于高性能本地 AI 转录。
 -   **桥接**：Chrome Native Messaging（连接扩展与本地 Python 进程）。
 
-## 排错
+## 常见问题
 
--   **Native host has exited**：检查 `host-macos.sh` 是否可执行，以及 `manifest.json` 中的路径是否正确。
--   **Permission Denied**：对 `native-host/` 目录下的所有脚本运行 `chmod +x`。
--   **下载错误**：如果是 Bilibili 1080p 视频，需要扩展具备读取 `.bilibili.com` Cookie 的权限。
+### "Native host has exited" / 扩展无法连接到服务
+
+**症状**：扩展显示连接错误或"本地服务未安装"，即使已经完成安装。
+
+**可能原因**：
+
+1. **扩展 ID 不匹配**（最常见）
+
+   系统中有**两个** manifest.json 文件：
+   - **源文件**：`~/Library/Application Support/VideoTextHost/manifest.json`（macOS）
+     - 由安装程序生成，包含正确的扩展 ID
+     - 作为模板使用，但 Chrome **不会读取**这个文件
+
+   - **Chrome 实际使用的文件**：`~/Library/Application Support/Google/Chrome/NativeMessagingHosts/com.video_text.transcriber.json`
+     - 这是 Chrome 真正读取的配置文件
+     - 在安装时从源文件复制而来
+
+   **问题所在**：如果你更新了扩展或使用不同的 ID 重新安装，源文件会被更新，但 Chrome 的文件可能仍然保留旧的 ID。
+
+   **解决方法**：
+   ```bash
+   # macOS：检查两个文件的扩展 ID 是否一致
+   cat ~/Library/Application\ Support/VideoTextHost/manifest.json
+   cat ~/Library/Application\ Support/Google/Chrome/NativeMessagingHosts/com.video_text.transcriber.json
+
+   # 如果不一致，复制正确的文件：
+   cp ~/Library/Application\ Support/VideoTextHost/manifest.json \
+      ~/Library/Application\ Support/Google/Chrome/NativeMessagingHosts/com.video_text.transcriber.json
+
+   # 然后在 chrome://extensions 中重新加载扩展
+   ```
+
+2. **脚本没有执行权限**
+   ```bash
+   chmod +x ~/Library/Application\ Support/VideoTextHost/host-macos.sh
+   ```
+
+3. **manifest 中的路径不正确**
+
+   验证 Chrome manifest 中的 `path` 字段指向正确位置：
+   ```bash
+   cat ~/Library/Application\ Support/Google/Chrome/NativeMessagingHosts/com.video_text.transcriber.json
+   ```
+
+### 权限被拒绝（Permission Denied）
+
+对 `native-host/` 目录下的所有脚本运行 `chmod +x` 命令。
+
+### 下载错误（403 / 401）
+
+-   **YouTube**：通常无需 cookies，使用移动端客户端模拟即可正常工作。
+-   **Bilibili 1080p**：需要 cookies 支持。扩展需要读取 `.bilibili.com` 域的 Cookie 权限。
+-   查看 `temp/service.log` 文件获取详细错误信息。
+
+### 首次转录很慢 / 找不到模型
+
+-   首次运行时会下载约 150MB 的 Whisper 模型到缓存目录（`~/.cache/whisper` 或 `~/.cache/faster-whisper`）
+-   后续的转录任务会快得多
+-   可以设置 `WHISPER_MODEL_DIR` 环境变量来指定自定义缓存位置
 
 ## 后续计划
 
