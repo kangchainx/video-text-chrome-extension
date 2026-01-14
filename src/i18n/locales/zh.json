@@ -35,7 +35,8 @@
     "requestFailed": "请求失败",
     "cannotConnectService": "无法连接本地服务",
     "serviceUnavailable": "本地服务不可用",
-    "notVideoPage": "请先打开视频播放页面"
+    "notVideoPage": "请先打开视频播放页面",
+    "nativeHostNotInstalled": "未安装本地服务"
   },
   "task": {
     "create": "添加任务",
@@ -190,10 +191,51 @@
         "description": "开源项目，无需付费，无使用限制，支持无限次转录"
       }
     },
+    "installation": {
+      "title": "📥 安装本地服务",
+      "checking": "检测安装状态中...",
+      "installed": "✅ 本地服务已安装，可以开始使用！",
+      "notInstalled": "⚠️ 未检测到本地服务",
+      "required": "首次使用必须安装",
+      "macOS": "macOS",
+      "windows": "Windows",
+      "unsupported": "不支持的平台",
+      "afterInstall": "安装完成后，请刷新本插件以激活服务",
+      "macOSTitle": "macOS 一键安装",
+      "macOSStep1": "复制下方命令",
+      "macOSStep2": "打开「终端」应用",
+      "macOSStep3": "粘贴并运行命令",
+      "macOSCommand": "/bin/bash -c \"$(curl -fsSL https://raw.githubusercontent.com/kangchainx/video-text-chrome-extension/main/native-host/install_mac.sh)\"",
+      "windowsTitle": "Windows 一键安装",
+      "windowsStep1": "下载安装脚本",
+      "windowsStep2": "右键点击文件",
+      "windowsStep3": "选择「使用 PowerShell 运行」",
+      "downloadScript": "下载 install_win.ps1",
+      "whatWillInstall": "安装程序将自动完成：",
+      "autoStep1": "下载最新的本地服务包",
+      "autoStep2": "安装到用户目录",
+      "autoStep3": "向浏览器注册服务配置",
+      "copyCommand": "复制命令",
+      "copied": "已复制！",
+      "needHelp": "需要帮助？",
+      "viewDocs": "查看文档",
+      "manualInstall": "手动安装指南",
+      "notInstalledTitle": "📦 本地服务未安装",
+      "notInstalledMessage": "视频转文字助手需要本地服务支持才能正常工作。",
+      "openGuide": "打开安装向导",
+      "whyNeeded": "为什么需要本地服务？",
+      "reason1": "突破浏览器限制，下载视频音频",
+      "reason2": "使用本地 AI 模型进行转录",
+      "reason3": "保护隐私，所有数据不上传云端"
+    },
     "howToStart": {
       "title": "如何开始使用？",
+      "stepInstall": "下载并运行适合您系统的安装程序",
+      "stepVideo": "打开 YouTube 或 Bilibili 视频页面",
+      "stepPanel": "点击浏览器右上角的插件图标打开侧边栏",
+      "stepTask": "点击「添加任务」按钮开始转录",
       "steps": [
-        "安装本地服务（首次使用）",
+        "下载并运行适合您系统的安装程序",
         "打开 YouTube 或 Bilibili 视频页面",
         "点击浏览器右上角的插件图标打开侧边栏",
         "点击「添加任务」按钮开始转录"

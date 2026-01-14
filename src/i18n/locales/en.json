@@ -35,7 +35,8 @@
     "requestFailed": "Request failed",
     "cannotConnectService": "Cannot connect to local service",
     "serviceUnavailable": "Local service unavailable",
-    "notVideoPage": "Please open a video play page"
+    "notVideoPage": "Please open a video play page",
+    "nativeHostNotInstalled": "Native host not installed"
   },
   "task": {
     "create": "Create Task",
@@ -186,12 +187,53 @@
         "description": "Open source project, no payment required, no usage limits, unlimited transcriptions"
       }
     },
+    "installation": {
+      "title": "📥 Install Local Service",
+      "checking": "Checking installation status...",
+      "installed": "✅ Local service is installed and ready!",
+      "notInstalled": "⚠️ Local service not detected",
+      "required": "Required for first-time use",
+      "macOS": "macOS",
+      "windows": "Windows",
+      "unsupported": "Unsupported Platform",
+      "afterInstall": "After installation, reload this extension to activate the service",
+      "macOSTitle": "macOS One-Click Install",
+      "macOSStep1": "Copy the command below",
+      "macOSStep2": "Open Terminal app",
+      "macOSStep3": "Paste and run the command",
+      "macOSCommand": "/bin/bash -c \"$(curl -fsSL https://raw.githubusercontent.com/kangchainx/video-text-chrome-extension/main/native-host/install_mac.sh)\"",
+      "windowsTitle": "Windows One-Click Install",
+      "windowsStep1": "Download the installer script",
+      "windowsStep2": "Right-click the file",
+      "windowsStep3": "Select \"Run with PowerShell\"",
+      "downloadScript": "Download install_win.ps1",
+      "whatWillInstall": "The installer will automatically:",
+      "autoStep1": "Download the latest native host package",
+      "autoStep2": "Install to your user directory",
+      "autoStep3": "Register the service with your browser",
+      "copyCommand": "Copy Command",
+      "copied": "Copied!",
+      "needHelp": "Need Help?",
+      "viewDocs": "View Documentation",
+      "manualInstall": "Manual Installation Guide",
+      "notInstalledTitle": "📦 Native Service Not Installed",
+      "notInstalledMessage": "Video Text Assistant requires the native service to function properly.",
+      "openGuide": "Open Installation Guide",
+      "whyNeeded": "Why is the native service needed?",
+      "reason1": "Bypass browser limitations to download video audio",
+      "reason2": "Use local AI models for transcription",
+      "reason3": "Protect privacy - all data stays local"
+    },
     "howToStart": {
       "title": "How to Get Started?",
+      "stepInstall": "Download and run the installer for your platform",
+      "stepVideo": "Open a YouTube or Bilibili video page",
+      "stepPanel": "Click extension icon to open the sidebar",
+      "stepTask": "Click \"Add Task\" to start transcription",
       "steps": [
-        "Install local service (first-time use)",
+        "Download and run the installer for your platform",
         "Open a YouTube or Bilibili video page",
-        "Open sidebar via extension icon",
+        "Click extension icon to open the sidebar",
         "Click \"Add Task\" to start transcription"
       ]
     },

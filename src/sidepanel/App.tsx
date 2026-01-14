@@ -744,7 +744,18 @@ const App: React.FC = () => {
     if (tourMode === "auto") return;
     if (!autoConnectEnabled) return;
     if (serviceStatus !== "idle") return;
-    ensureService(false).catch(() => undefined);
+    ensureService(false).catch((error) => {
+      // Check if Native Host is not installed
+      const errorMsg = error?.message || '';
+      if (errorMsg.includes('Specified native messaging host not found') ||
+          errorMsg.includes('native_error')) {
+        setServiceError('nativeHostNotInstalled');
+        // Immediately hide overlay for Native Host not installed error
+        setOverlayVisible(false);
+        setOverlayHiding(false);
+        overlayLockedRef.current = false;
+      }
+    });
     return () => {
       if (sseRef.current) {
         sseRef.current.close();
@@ -1510,47 +1521,94 @@ const App: React.FC = () => {
         ref={mainRef}
         className="flex-1 overflow-y-auto px-6 py-6 relative z-10"
       >
-        {(serviceStatus === "error" || diagnosticStage !== "idle") && (
-          <div className="mb-6 rounded-[24px] bg-slate-50 p-5 shadow-sm list-entry">
-            {diagnosticStage === "idle" && (
-              <div className="flex flex-col items-center justify-center text-center">
-                <div className="text-sm font-semibold text-slate-700">
-                  {t("diagnostic.title")}
-                </div>
-                <p className="mt-1 text-xs text-slate-400">
-                  {t("diagnostic.description")}
-                </p>
-                {serviceStatus === "error" && (
-                  <div className="mt-3 flex items-center gap-2 rounded-full bg-rose-50 px-3 py-1 text-[11px] text-rose-500">
-                    <WarningCircle size={12} />
-                    <span className="font-semibold">
-                      {t("service.notReady")}
-                    </span>
-                    <span className="text-rose-400">
-                      {getServiceErrorMessage(serviceError)}
-                    </span>
-                  </div>
-                )}
-                <div className="mt-4 flex items-center gap-2">
-                  <button
-                    onClick={runDiagnostics}
-                    className="inline-flex items-center gap-2 rounded-full bg-indigo-600 px-4 py-2 text-white text-xs font-bold transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
-                  >
-                    {t("diagnostic.start")}
-                  </button>
-                  {serviceStatus === "error" && (
-                    <button
-                      onClick={handleReconnect}
-                      className="inline-flex items-center gap-2 rounded-full border border-rose-200 bg-white px-4 py-2 text-rose-500 text-xs font-bold transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
-                    >
-                      <ArrowClockwise size={14} />
-                      {t("diagnostic.reconnect")}
-                    </button>
-                  )}
-                </div>
+        {/* Native Host Not Installed - Show Installation Guide */}
+        {serviceStatus === "error" && serviceError === "nativeHostNotInstalled" && (
+          <div className="mb-6 rounded-[24px] bg-gradient-to-br from-orange-50 to-rose-50 border-2 border-orange-200 p-8 shadow-lg list-entry">
+            <div className="flex flex-col items-center justify-center text-center">
+              <div className="mb-4 flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-orange-400 to-rose-500 shadow-lg">
+                <Download size={40} weight="bold" className="text-white" />
               </div>
-            )}
+              <h3 className="text-xl font-extrabold text-slate-800 mb-2">
+                {t("welcome.installation.notInstalledTitle")}
+              </h3>
+              <p className="text-sm text-slate-600 mb-6 max-w-md">
+                {t("welcome.installation.notInstalledMessage")}
+              </p>
 
+              <button
+                onClick={() => {
+                  chrome.tabs.create({ url: chrome.runtime.getURL('welcome.html') });
+                }}
+                className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-orange-500 to-rose-500 px-6 py-3 text-white text-sm font-bold transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl hover:scale-105"
+              >
+                <Download size={18} weight="bold" />
+                {t("welcome.installation.openGuide")}
+              </button>
+
+              <div className="mt-6 pt-6 border-t border-orange-200 w-full max-w-md">
+                <p className="text-xs font-semibold text-slate-700 mb-3">
+                  {t("welcome.installation.whyNeeded")}
+                </p>
+                <ul className="space-y-2 text-xs text-slate-600 text-left">
+                  <li className="flex items-start gap-2">
+                    <CheckCircle size={14} weight="fill" className="text-orange-500 mt-0.5 shrink-0" />
+                    <span>{t("welcome.installation.reason1")}</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <CheckCircle size={14} weight="fill" className="text-orange-500 mt-0.5 shrink-0" />
+                    <span>{t("welcome.installation.reason2")}</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <CheckCircle size={14} weight="fill" className="text-orange-500 mt-0.5 shrink-0" />
+                    <span>{t("welcome.installation.reason3")}</span>
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Diagnostic Panel - Show for other errors */}
+        {serviceStatus === "error" && serviceError !== "nativeHostNotInstalled" && diagnosticStage === "idle" && (
+          <div className="mb-6 rounded-[24px] bg-slate-50 p-5 shadow-sm list-entry">
+            <div className="flex flex-col items-center justify-center text-center">
+              <div className="text-sm font-semibold text-slate-700">
+                {t("diagnostic.title")}
+              </div>
+              <p className="mt-1 text-xs text-slate-400">
+                {t("diagnostic.description")}
+              </p>
+              <div className="mt-3 flex items-center gap-2 rounded-full bg-rose-50 px-3 py-1 text-[11px] text-rose-500">
+                <WarningCircle size={12} />
+                <span className="font-semibold">
+                  {t("service.notReady")}
+                </span>
+                <span className="text-rose-400">
+                  {getServiceErrorMessage(serviceError)}
+                </span>
+              </div>
+              <div className="mt-4 flex items-center gap-2">
+                <button
+                  onClick={runDiagnostics}
+                  className="inline-flex items-center gap-2 rounded-full bg-indigo-600 px-4 py-2 text-white text-xs font-bold transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
+                >
+                  {t("diagnostic.start")}
+                </button>
+                <button
+                  onClick={handleReconnect}
+                  className="inline-flex items-center gap-2 rounded-full border border-rose-200 bg-white px-4 py-2 text-rose-500 text-xs font-bold transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
+                >
+                  <ArrowClockwise size={14} />
+                  {t("diagnostic.reconnect")}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Diagnostic Running/Results */}
+        {diagnosticStage !== "idle" && (
+          <div className="mb-6 rounded-[24px] bg-slate-50 p-5 shadow-sm list-entry">
             {diagnosticStage === "running" && (
               <div className="flex gap-5">
                 <div className="relative h-24 w-24 shrink-0">
