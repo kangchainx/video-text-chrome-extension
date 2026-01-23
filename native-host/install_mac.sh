@@ -26,16 +26,41 @@ NC='\033[0m'
 echo -e "${BLUE}=== VideoText Native Host Installer (macOS) ===${NC}"
 
 # Check for existing installation
+BACKUP_DIR=""
 if [ -d "$INSTALL_DIR" ]; then
     echo -e "\n${YELLOW}⚠️  Existing installation found at:${NC} $INSTALL_DIR"
-    echo "This may contain cached models and temp files."
-    read -p "Do you want to reinstall and clear previous data? [y/N] " -n 1 -r
-    echo
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        echo "Installation canceled by user."
-        exit 1
+    echo "Upgrading to the latest version..."
+    echo "Your cached models, task history, and settings will be preserved."
+    
+    # Create backup of user data
+    echo -e "${YELLOW}Backing up user data...${NC}"
+    BACKUP_DIR="$INSTALL_DIR.backup.$(date +%s)"
+    mkdir -p "$BACKUP_DIR"
+    
+    # Backup temp directory (contains cached models, tasks.db, service.token, etc.)
+    if [ -d "$INSTALL_DIR/temp" ]; then
+        cp -R "$INSTALL_DIR/temp" "$BACKUP_DIR/"
+        echo "✅ Backed up temp directory (models, database, settings)"
     fi
-    echo -e "${YELLOW}Removing existing installation...${NC}"
+    
+    # Backup video-text-transcriber temp if exists
+    if [ -d "$INSTALL_DIR/video-text-transcriber/temp" ]; then
+        cp -R "$INSTALL_DIR/video-text-transcriber/temp" "$BACKUP_DIR/vtt-temp"
+        echo "✅ Backed up transcriber temp directory"
+    fi
+    
+    # Save extension ID for reference
+    if [ -f "$INSTALL_DIR/extension-id.txt" ]; then
+        cp "$INSTALL_DIR/extension-id.txt" "$BACKUP_DIR/"
+        echo "✅ Backed up extension ID"
+    fi
+    
+    # Stop running service
+    pkill -9 video-text-transcriber 2>/dev/null || true
+    sleep 1
+    
+    # Remove old installation
+    echo -e "${YELLOW}Removing old installation...${NC}"
     rm -rf "$INSTALL_DIR"
 fi
 
@@ -120,8 +145,31 @@ if [ -d "$HOME/Library/Application Support/Microsoft Edge" ]; then
     echo "✅ Registered for Microsoft Edge"
 fi
 
-# 5. Cleanup & Restart
+# 5. Restore user data (if upgrading)
 echo -e "\n${YELLOW}[5/5] Finishing up...${NC}"
+
+# Restore user data from backup if this was an upgrade
+if [ -n "$BACKUP_DIR" ] && [ -d "$BACKUP_DIR" ]; then
+    echo -e "${YELLOW}Restoring user data...${NC}"
+    
+    # Restore temp directory
+    if [ -d "$BACKUP_DIR/temp" ]; then
+        cp -R "$BACKUP_DIR/temp" "$INSTALL_DIR/"
+        echo "✅ Restored temp directory (models, database, settings)"
+    fi
+    
+    # Restore transcriber temp
+    if [ -d "$BACKUP_DIR/vtt-temp" ]; then
+        mkdir -p "$INSTALL_DIR/video-text-transcriber"
+        cp -R "$BACKUP_DIR/vtt-temp" "$INSTALL_DIR/video-text-transcriber/temp"
+        echo "✅ Restored transcriber temp directory"
+    fi
+    
+    # Cleanup backup
+    rm -rf "$BACKUP_DIR"
+    echo "✅ Cleanup complete"
+fi
+
 # Kill existing process so new one starts on next extension usage
 pkill -9 video-text-transcriber 2>/dev/null || true
 
@@ -131,5 +179,10 @@ echo -e "${GREEN}==========================================${NC}"
 echo "1. The native host has been installed to:"
 echo "   $INSTALL_DIR"
 echo "2. Gatekeeper checks have been bypassed."
-echo "3. Please reload the VideoText extension in Chrome."
+if [ -n "$BACKUP_DIR" ]; then
+    echo "3. Your cached models and task history have been preserved."
+    echo "4. Please reload the VideoText extension in Chrome."
+else
+    echo "3. Please reload the VideoText extension in Chrome."
+fi
 echo ""
