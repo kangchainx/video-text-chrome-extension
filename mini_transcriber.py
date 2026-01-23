@@ -16,6 +16,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
+# Version information
+SERVICE_VERSION = "1.0.1"  # Update this when releasing new native host versions
+
 # Default to 4 threads for better performance, or limited by system cores
 default_threads = "4"
 if hasattr(os, "cpu_count"):
@@ -198,7 +201,24 @@ last_activity = time.time()
 
 @app.get("/health")
 def health_check():
-    return {"status": "ok"}
+    # Get yt-dlp version if available
+    ytdlp_version = "unknown"
+    try:
+        import yt_dlp
+        ytdlp_version = yt_dlp.version.__version__
+    except Exception:
+        pass
+
+    # ==== 测试模式：返回旧版本号以触发更新提示 ====
+    # 取消下方注释以测试更新提示功能
+    # ytdlp_version = "2025.01.01"  # 模拟旧版本
+    # ==============================================
+
+    return {
+        "status": "ok",
+        "service_version": SERVICE_VERSION,
+        "ytdlp_version": ytdlp_version
+    }
 
 
 @app.get("/api/status")
@@ -886,8 +906,6 @@ def _download_audio(task_id: str, url: str, cookiefile: Optional[str]) -> Path:
         "quiet": True,
         "noplaylist": True,
         "progress_hooks": [progress_hook],
-        "js_runtimes": {"node": {}},
-        "remote_components": ["ejs:github"],
         "postprocessors": [
             {
                 "key": "FFmpegExtractAudio",
@@ -897,28 +915,48 @@ def _download_audio(task_id: str, url: str, cookiefile: Optional[str]) -> Path:
         ],
     }
 
-    try:
-        opts = base_opts.copy()
-        
-        # CRITICAL: android/ios clients do NOT support cookies
-        # Only use them when no cookies are provided
-        has_cookiefile = cookiefile and os.path.exists(cookiefile)
-        if has_cookiefile:
-            # Use default client when cookies are available (user is logged in)
+    # Configure Node.js runtime for n-signature solving if available
+    node_bin = os.getenv("NODE_BIN")
+    if node_bin and os.path.exists(node_bin):
+        base_opts["js_runtimes"] = {"node": {"executable": node_bin}}
+        base_opts["remote_components"] = ["ejs:github"]
+        _log(f"YTDLP: Configured node runtime: {node_bin}")
+    else:
+        # No Node.js available, rely on mobile clients as fallback
+        _log(f"YTDLP: No node runtime found, using mobile clients only")
+
+    has_cookiefile = cookiefile and os.path.exists(cookiefile)
+
+    # Strategy 1: Try with cookies if available
+    if has_cookiefile:
+        try:
+            opts = base_opts.copy()
             opts["cookiefile"] = cookiefile
-            _log(f"YTDLP: Using cookies with default client for task={task_id}")
-        else:
-            # Use mobile clients to bypass 403 when no cookies (not logged in)
+            # Prefer mobile clients even with cookies to avoid n-signature issues
+            # They work well for most videos and don't require EJS
             opts["extractor_args"] = {
                 "youtube": {
-                    "player_client": ["android", "ios"],
+                    "player_client": ["android", "ios", "web"],
                 }
             }
-            _log(f"YTDLP: No cookies, using android/ios clients for task={task_id}")
-        
+            _log(f"YTDLP: Trying with cookies + mobile clients for task={task_id}")
+            return _run_yt_dlp(url, opts, task_id)
+        except Exception as exc1:
+            _log(f"YTDLP: Failed with cookies ({exc1}), retrying without cookies")
+            # Fall through to strategy 2
+
+    # Strategy 2: Use mobile clients without cookies (most reliable)
+    try:
+        opts = base_opts.copy()
+        opts["extractor_args"] = {
+            "youtube": {
+                "player_client": ["android", "ios"],
+            }
+        }
+        _log(f"YTDLP: Using android/ios clients without cookies for task={task_id}")
         return _run_yt_dlp(url, opts, task_id)
-    except Exception as exc:
-        raise RuntimeError(f"下载音频失败: {exc}")
+    except Exception as exc2:
+        raise RuntimeError(f"下载音频失败: {exc2}")
 
 
 def _transcribe_audio(task_id: str, audio_path: Path) -> str:

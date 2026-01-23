@@ -1,8 +1,9 @@
 {
   "manifest_version": 3,
   "name": "视频转文字助手",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "一键提取视频字幕或通过 AI 实时转录音频为文字。",
+  "homepage_url": "https://github.com/kangchainx/video-text-chrome-extension",
   "permissions": [
     "sidePanel",
     "activeTab",

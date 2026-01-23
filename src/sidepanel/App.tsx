@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import ConfirmModal from "./ConfirmModal";
+import UpdateBadge from "../components/UpdateBadge";
+import { startPeriodicCheck, UpdateInfo } from "../services/updateChecker";
 import {
   ArrowClockwise,
   CheckCircle,
@@ -174,6 +176,7 @@ const App: React.FC = () => {
   });
   const [autoConnectEnabled, setAutoConnectEnabled] = useState(true);
   const [animateActiveCount, setAnimateActiveCount] = useState(false);
+  const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
   const [confirmModalConfig, setConfirmModalConfig] = useState<{
     isOpen: boolean;
     title: string;
@@ -956,6 +959,23 @@ const App: React.FC = () => {
     chrome.action.setBadgeBackgroundColor({ color: "#4F46E5" });
   }, [tasksWithDisplay]);
 
+  // 启动 yt-dlp 更新检查
+  useEffect(() => {
+    // 只在服务就绪后启动更新检查
+    if (serviceStatus !== "ready") return;
+    
+    const cleanup = startPeriodicCheck((info) => {
+      console.log('[App] Update available:', info);
+      setUpdateInfo(info);
+    });
+
+    return cleanup;
+  }, [serviceStatus]);
+
+  const dismissUpdate = () => {
+    setUpdateInfo(null);
+  };
+
   const getActiveTab = () => {
     return new Promise<chrome.tabs.Tab>((resolve, reject) => {
       chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
@@ -1102,6 +1122,28 @@ const App: React.FC = () => {
   };
 
   const handleAddTask = async () => {
+    // 如果有更新可用，先显示确认对话框
+    if (updateInfo && updateInfo.needsUpdate) {
+      setConfirmModalConfig({
+        isOpen: true,
+        title: t("modal.updateWarning.title"),
+        message: t("modal.updateWarning.message"),
+        description: t("modal.updateWarning.description"),
+        variant: "warning",
+        onConfirm: () => {
+          setConfirmModalConfig((prev) => ({ ...prev, isOpen: false }));
+          // 用户确认后执行添加任务
+          doAddTask();
+        },
+      });
+      return;
+    }
+    
+    // 没有更新或用户已确认，直接执行添加任务
+    doAddTask();
+  };
+
+  const doAddTask = async () => {
     setIsAdding(true);
     try {
       if (serviceStatus !== "ready") {
@@ -1521,7 +1563,7 @@ const App: React.FC = () => {
       <header className="px-6 py-6 bg-white/80 backdrop-blur-xl border-b border-white/40 flex items-center justify-between sticky top-0 z-20">
         <div>
           <div className="flex items-center gap-3">
-            <h1 className="text-3xl font-black tracking-tight text-slate-900">
+            <h1 className="text-3xl font-black tracking-tight text-slate-900 whitespace-nowrap">
               {t("app.title")}
             </h1>
             {/* Live Indicator implementing original service logic visually */}
@@ -1566,13 +1608,14 @@ const App: React.FC = () => {
         <div className="flex items-center gap-1">
           <button
             onClick={() => {
-              const newLang = i18n.language === "zh" ? "en" : "zh";
+              const isZh = i18n.language.startsWith("zh");
+              const newLang = isZh ? "en" : "zh";
               i18n.changeLanguage(newLang);
             }}
             className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-500 rounded-lg hover:bg-slate-200/50 hover:text-slate-800 transition-all"
           >
             <Globe size={14} />
-            <span>{i18n.language === "zh" ? "EN" : "中文"}</span>
+            <span>{i18n.language.startsWith("zh") ? "EN" : "中文"}</span>
           </button>
 
           <button
@@ -1589,6 +1632,10 @@ const App: React.FC = () => {
         ref={mainRef}
         className="flex-1 overflow-y-auto px-6 py-6 relative z-10"
       >
+        {/* yt-dlp 更新提示 */}
+        {updateInfo && updateInfo.needsUpdate && (
+          <UpdateBadge updateInfo={updateInfo} onDismiss={dismissUpdate} />
+        )}
         {/* Native Host Not Installed - Show Installation Guide */}
         {serviceStatus === "error" && serviceError === "nativeHostNotInstalled" && (
           <div className="mb-6 rounded-[24px] bg-gradient-to-br from-orange-50 to-rose-50 border-2 border-orange-200 p-8 shadow-lg list-entry">

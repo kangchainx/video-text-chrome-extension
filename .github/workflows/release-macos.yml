@@ -108,9 +108,9 @@ jobs:
           cd staging
           zip -r ../video-text-host-macos.zip .
 
-      - name: Prepare Install Script
+      - name: Prepare Install/Update Scripts
         run: |
-          # Ensure the install script is available as a standalone asset
+          # Ensure the install script is available as standalone asset
           cp native-host/install_mac.sh install_mac.sh
 
       - name: Create Release

@@ -83,6 +83,11 @@
       "message": "确定要停止本地服务吗？",
       "description": "正在进行的任务将被中断"
     },
+    "updateWarning": {
+      "title": "服务更新提醒",
+      "message": "本地服务有新版本，是否继续创建任务？",
+      "description": "不更新可能导致部分视频下载失败。建议先重新安装服务后再创建任务。"
+    },
     "confirm": "确定",
     "cancel": "取消"
   },
@@ -251,6 +256,28 @@
       "discussions": "参与讨论"
     },
     "footer": "现在就打开一个视频页面，开始你的第一次转录吧！🚀"
+  },
+  "update": {
+    "badge": {
+      "title": "新版本可用"
+    },
+    "tooltip": {
+      "title": "本地服务有新版本",
+      "currentVersion": "当前版本",
+      "latestVersion": "最新版本",
+      "whyUpdate": "为什么需要更新？",
+      "reason1": "修复视频下载失败问题",
+      "reason2": "提升下载速度和稳定性",
+      "reason3": "支持更多视频格式和网站",
+      "howToUpdate": "如何更新",
+      "step1": "复制下方命令",
+      "step2": "打开终端并粘贴执行",
+      "step3": "等待安装完成后重新加载扩展",
+      "copyCommand": "复制命令",
+      "copied": "已复制",
+      "downloadScript": "下载安装脚本",
+      "warning": "安装过程会保留您的模型缓存和设置"
+    }
   },
   "language": {
     "zh": "中文",

@@ -13,6 +13,7 @@ native-host/macos-pkg/build
 CLAUDE.md
 .claude
 AGENT_CONTEXT.md
+docs/
 
 # Native Host Refactoring & Build Artifacts
 native-host/build/
