@@ -1,6 +1,6 @@
 {
   "app": {
-    "title": "Transcription Panel",
+    "title": "Task Center",
     "subtitle": "Local Queue"
   },
   "service": {
@@ -78,6 +78,11 @@
       "title": "Stop Service",
       "message": "Are you sure you want to stop the service?",
       "description": "Active tasks will be interrupted"
+    },
+    "updateWarning": {
+      "title": "Service Update Reminder",
+      "message": "A new service version is available. Continue creating task?",
+      "description": "Videos may fail to download without updating. We recommend reinstalling the service first."
     },
     "confirm": "Confirm",
     "cancel": "Cancel"
@@ -247,6 +252,28 @@
       "discussions": "Discussions"
     },
     "footer": "Open a video page now and start your first transcription! 🚀"
+  },
+  "update": {
+    "badge": {
+      "title": "New Version Available"
+    },
+    "tooltip": {
+      "title": "New Service Version Available",
+      "currentVersion": "Current Version",
+      "latestVersion": "Latest Version",
+      "whyUpdate": "Why Update?",
+      "reason1": "Fix video download failures",
+      "reason2": "Improve download speed and stability",
+      "reason3": "Support more video formats and sites",
+      "howToUpdate": "How to Install",
+      "step1": "Copy the command below",
+      "step2": "Open Terminal and paste to execute",
+      "step3": "Reload extension after installation completes",
+      "copyCommand": "Copy Command",
+      "copied": "Copied",
+      "downloadScript": "Download Install Script",
+      "warning": "Installation will preserve your model cache and settings"
+    }
   },
   "language": {
     "zh": "中文",
