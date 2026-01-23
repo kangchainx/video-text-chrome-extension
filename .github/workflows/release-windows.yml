@@ -76,7 +76,15 @@ jobs:
         shell: pwsh
         run: |
           choco install nsis -y
-          makensis /DINSTDIR_BACKUP="$env:TEMP\VideoTextBackup" native-host/installer.nsi
+          # Update Path for current session or use absolute path
+          $env:Path += ";C:\Program Files (x86)\NSIS"
+
+          if (Get-Command makensis -ErrorAction SilentlyContinue) {
+            makensis /DINSTDIR_BACKUP="$env:TEMP\VideoTextBackup" native-host/installer.nsi
+          } else {
+            & "C:\Program Files (x86)\NSIS\makensis.exe" /DINSTDIR_BACKUP="$env:TEMP\VideoTextBackup" native-host/installer.nsi
+          }
+
           Move-Item -Path "native-host/VideoTextInstaller.exe" -Destination "VideoTextInstaller.exe"
 
       - name: Create Release
