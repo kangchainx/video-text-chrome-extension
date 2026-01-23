@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { UpdateInfo } from '../services/updateChecker'
 
 interface AppState {
   isRecording: boolean
@@ -9,6 +10,9 @@ interface AppState {
   videoDetected: boolean
   showDownloadConfirm: boolean
   
+  // 更新状态
+  updateInfo: UpdateInfo | null
+  
   setRecording: (recording: boolean) => void
   setModelLoading: (loading: boolean) => void
   setModelProgress: (progress: number) => void
@@ -17,6 +21,10 @@ interface AppState {
   setVideoSource: (id: string | null) => void
   setVideoDetected: (detected: boolean) => void
   setDownloadConfirm: (show: boolean) => void
+  
+  // 更新操作
+  setUpdateInfo: (info: UpdateInfo | null) => void
+  dismissUpdate: () => void
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -27,6 +35,9 @@ export const useAppStore = create<AppState>((set) => ({
   videoSourceId: null,
   videoDetected: false,
   showDownloadConfirm: false,
+  
+  // 更新状态
+  updateInfo: null,
 
   setRecording: (recording) => set({ isRecording: recording }),
   setModelLoading: (loading) => set({ isModelLoading: loading }),
@@ -36,4 +47,8 @@ export const useAppStore = create<AppState>((set) => ({
   setVideoSource: (id) => set({ videoSourceId: id }),
   setVideoDetected: (detected) => set({ videoDetected: detected }),
   setDownloadConfirm: (show) => set({ showDownloadConfirm: show }),
+  
+  // 更新操作
+  setUpdateInfo: (info) => set({ updateInfo: info }),
+  dismissUpdate: () => set({ updateInfo: null }),
 }))
