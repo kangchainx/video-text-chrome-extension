@@ -23,7 +23,7 @@ const UpdateBadge: React.FC<UpdateBadgeProps> = ({ updateInfo, onDismiss }) => {
   // 安装命令
   const installCommand = platform === 'macOS'
     ? `/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/kangchainx/video-text-chrome-extension/main/native-host/install_mac.sh)"`
-    : 'Download and run install_win.ps1';
+    : 'Download and run VideoTextInstaller.exe';
 
   // 复制命令到剪贴板
   const handleCopy = async () => {
@@ -40,11 +40,11 @@ const UpdateBadge: React.FC<UpdateBadgeProps> = ({ updateInfo, onDismiss }) => {
   const handleDownload = () => {
     const downloadUrl = platform === 'macOS'
       ? 'https://github.com/kangchainx/video-text-chrome-extension/releases/latest/download/install_mac.sh'
-      : 'https://github.com/kangchainx/video-text-chrome-extension/releases/latest/download/install_win.ps1';
+      : 'https://github.com/kangchainx/video-text-chrome-extension/releases/latest/download/VideoTextInstaller.exe';
     
     chrome.downloads.download({
       url: downloadUrl,
-      filename: platform === 'macOS' ? 'install_mac.sh' : 'install_win.ps1',
+      filename: platform === 'macOS' ? 'install_mac.sh' : 'VideoTextInstaller.exe',
       saveAs: true
     })
   }
