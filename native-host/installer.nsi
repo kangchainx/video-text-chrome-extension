@@ -12,7 +12,7 @@ RequestExecutionLevel user ; No admin required since we install to AppData
 
 ; --- Interface Settings ---
 !define MUI_ABORTWARNING
-!define MUI_ICON "setup_icon.ico" ; We'll use a placeholder or skip if not found
+; !define MUI_ICON "setup_icon.ico" ; We'll use a placeholder or skip if not found
 
 ; --- Pages ---
 !insertmacro MUI_PAGE_WELCOME
