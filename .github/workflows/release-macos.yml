@@ -108,10 +108,11 @@ jobs:
           cd staging
           zip -r ../video-text-host-macos.zip .
 
-      - name: Prepare Install Script
+      - name: Prepare Install/Update Scripts
         run: |
-          # Ensure the install script is available as a standalone asset
+          # Ensure the install/update scripts are available as standalone assets
           cp native-host/install_mac.sh install_mac.sh
+          cp native-host/update_mac.sh update_mac.sh
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
@@ -120,6 +121,7 @@ jobs:
           files: |
             video-text-host-macos.zip
             install_mac.sh
+            update_mac.sh
             native-host/uninstall_mac.sh
           draft: false
           prerelease: false

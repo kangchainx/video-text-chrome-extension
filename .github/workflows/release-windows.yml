@@ -72,13 +72,20 @@ jobs:
           $ZipPath = "video-text-host-win.zip"
           Compress-Archive -Path "$StagingDir\*" -DestinationPath $ZipPath
 
+      - name: Build Installer with NSIS
+        shell: pwsh
+        run: |
+          choco install nsis -y
+          makensis /DINSTDIR_BACKUP="$env:TEMP\VideoTextBackup" native-host/installer.nsi
+          Move-Item -Path "native-host/VideoTextInstaller.exe" -Destination "VideoTextInstaller.exe"
+
       - name: Create Release
         uses: softprops/action-gh-release@v1
         if: startsWith(github.ref, 'refs/tags/')
         with:
           files: |
             video-text-host-win.zip
-            native-host/VideoTextInstaller.exe
+            VideoTextInstaller.exe
             native-host/uninstall_win.bat
           draft: false
           prerelease: false
