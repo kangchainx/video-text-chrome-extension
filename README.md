@@ -96,6 +96,17 @@ python mini_transcriber.py
 
 ## 📝 Version History
 
+### v1.0.3 (2026-01-24)
+
+**⚡️ Automation & Build System**
+- **Automated Chrome Extension Build**: Added GitHub Actions workflow to auto-build and release the Chrome Extension zip.
+- **Auto-Update yt-dlp**: Release builds now automatically fetch and package the latest version of `yt-dlp`, ensuring users always get the newest downloader.
+- **Smart Release Notes**: Release notes are now automatically extracted from README.md and enriched with component version info.
+
+### v1.0.2 (2026-01-23)
+- Fix Windows installer download link
+- General stability improvements
+
 ### v1.0.1 (2026-01-15)
 
 **✨ New Features**
