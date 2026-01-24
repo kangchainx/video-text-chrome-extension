@@ -26,7 +26,66 @@ jobs:
           pip install -r requirements.txt
           # Force reinstall binary packages to ensure they match the runner architecture
           pip install --force-reinstall --no-cache-dir tokenizers ctranslate2 faster-whisper
+          # Upgrade yt-dlp to latest version for the build
+          pip install -U yt-dlp
           pip install pyinstaller
+
+      - name: Get Component Versions
+        id: versions
+        run: |
+          YTDLP_VER=$(python -c "import yt_dlp; print(yt_dlp.version.__version__)")
+          echo "Detected yt-dlp version: $YTDLP_VER"
+          echo "ytdlp_version=$YTDLP_VER" >> $GITHUB_OUTPUT
+
+      - name: Extract Changelog from README
+        id: changelog
+        shell: python
+        run: |
+          import re
+          import os
+
+          tag_name = os.environ["GITHUB_REF_NAME"]  # e.g., v1.0.2
+          readme_path = "README.md"
+
+          try:
+            with open(readme_path, "r", encoding="utf-8") as f:
+                content = f.read()
+            
+            # Regex to find the section for the current tag
+            # Matches "### v1.0.2 (202X-XX-XX)" until the next "### v..." or end of file
+            # Note: We escape the tag name to be safe
+            pattern = re.compile(
+                r"^### " + re.escape(tag_name) + r".*?\n(.*?)(?=\n### v|\Z)", 
+                re.MULTILINE | re.DOTALL
+            )
+            
+            match = pattern.search(content)
+            if match:
+                changelog_text = match.group(1).strip()
+                print(f"Found changelog for {tag_name}")
+            else:
+                changelog_text = "No changelog found in README.md for this version."
+                print(f"WARNING: No changelog section found for {tag_name}")
+            
+            # Construct the final body
+            ytdlp_version = "${{ steps.versions.outputs.ytdlp_version }}"
+            
+            final_body = f"""{changelog_text}
+
+          ---
+          **Component Versions:**
+          - yt-dlp: {ytdlp_version}
+          """
+            
+            # Write to a file to handle multiline output safely
+            with open("release_body.md", "w", encoding="utf-8") as f:
+                f.write(final_body)
+
+          except Exception as e:
+            print(f"Error extracting changelog: {e}")
+            # Fallback
+            with open("release_body.md", "w", encoding="utf-8") as f:
+                f.write(f"Release {tag_name}\n\n**Component Versions:**\n- yt-dlp: {{{{ steps.versions.outputs.ytdlp_version }}}}")
 
       - name: Build with PyInstaller
         run: |
@@ -117,6 +176,7 @@ jobs:
         uses: softprops/action-gh-release@v1
         if: startsWith(github.ref, 'refs/tags/')
         with:
+          body_path: release_body.md
           files: |
             video-text-host-macos.zip
             install_mac.sh
