@@ -12,10 +12,15 @@ echo "---- $(date -Iseconds) native-host wrapper start ----" >&2
 echo "SCRIPT_DIR=${SCRIPT_DIR}" >&2
 
 # Chrome launches Native Messaging hosts with a limited PATH.
-# Try to locate Node/Python robustly (Homebrew, system, nvm).
+# Try to locate Node/Python robustly (bundled, Homebrew, system, nvm).
 NODE_BIN="${NODE_BIN:-}"
+BUNDLED_NODE="${SCRIPT_DIR}/node/bin/node"
 # Prefer explicit PYTHON_BIN; otherwise try to detect python3 from PATH.
 PYTHON_BIN="${PYTHON_BIN:-}"
+
+if [ -z "${NODE_BIN}" ] && [ -x "${BUNDLED_NODE}" ]; then
+  NODE_BIN="${BUNDLED_NODE}"
+fi
 
 if [ -z "${NODE_BIN}" ]; then
   if command -v node >/dev/null 2>&1; then
@@ -34,9 +39,10 @@ if [ -z "${NODE_BIN}" ]; then
 fi
 
 if [ -z "${NODE_BIN}" ] || [ ! -x "${NODE_BIN}" ]; then
-  echo "node not found" >&2
+  echo "node not found (bundled or system)" >&2
   exit 127
 fi
+export NODE_BIN
 
 TRANSCRIBER_BIN="${TRANSCRIBER_BIN:-${SCRIPT_DIR}/video-text-transcriber}"
 USE_BIN=0
