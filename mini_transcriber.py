@@ -743,6 +743,41 @@ def _resolve_audio_path(task_id: str, prepared_filename: str) -> Path:
     raise RuntimeError("音频文件未生成")
 
 
+def _check_js_runtime() -> bool:
+    """Check if Node.js runtime is properly configured for yt-dlp."""
+    node_bin = os.getenv("NODE_BIN")
+    if not node_bin:
+        _log("STARTUP_CHECK: NODE_BIN not set, YouTube may fail on some videos requiring EJS")
+        return False
+    if not os.path.exists(node_bin):
+        _log(f"STARTUP_CHECK: NODE_BIN={node_bin} does not exist")
+        return False
+    if not os.access(node_bin, os.X_OK):
+        _log(f"STARTUP_CHECK: NODE_BIN={node_bin} not executable")
+        return False
+    try:
+        import subprocess
+        result = subprocess.run(
+            [node_bin, "--version"],
+            capture_output=True,
+            timeout=2,
+            text=True
+        )
+        if result.returncode == 0:
+            version = result.stdout.strip()
+            _log(f"STARTUP_CHECK: Node.js OK - {version} at {node_bin}")
+            return True
+        else:
+            _log(f"STARTUP_CHECK: Node.js test failed with code {result.returncode}")
+            return False
+    except subprocess.TimeoutExpired:
+        _log(f"STARTUP_CHECK: Node.js test timeout at {node_bin}")
+        return False
+    except Exception as e:
+        _log(f"STARTUP_CHECK: Node.js test error - {e}")
+        return False
+
+
 def _detect_ffmpeg() -> Optional[str]:
     # 1. Check env var
     override = os.getenv("FFMPEG_BINARY")
@@ -917,13 +952,26 @@ def _download_audio(task_id: str, url: str, cookiefile: Optional[str]) -> Path:
 
     # Configure Node.js runtime for n-signature solving if available
     node_bin = os.getenv("NODE_BIN")
-    if node_bin and os.path.exists(node_bin):
-        base_opts["js_runtimes"] = {"node": {"executable": node_bin}}
+    has_node_runtime = bool(
+        node_bin
+        and os.path.exists(node_bin)
+        and os.access(node_bin, os.X_OK)
+    )
+    if has_node_runtime:
+        # yt-dlp expects js_runtimes config as {runtime: {path: ...}}
+        base_opts["js_runtimes"] = {"node": {"path": node_bin}}
         base_opts["remote_components"] = ["ejs:github"]
         _log(f"YTDLP: Configured node runtime: {node_bin}")
     else:
         # No Node.js available, rely on mobile clients as fallback
-        _log(f"YTDLP: No node runtime found, using mobile clients only")
+        checked_path = os.getenv("NODE_BIN", "not set")
+        reason = "not set"
+        if node_bin:
+            if not os.path.exists(node_bin):
+                reason = "does not exist"
+            elif not os.access(node_bin, os.X_OK):
+                reason = "not executable"
+        _log(f"YTDLP: No node runtime found (NODE_BIN={checked_path}, {reason}), using mobile clients only")
 
     has_cookiefile = cookiefile and os.path.exists(cookiefile)
 
@@ -932,14 +980,13 @@ def _download_audio(task_id: str, url: str, cookiefile: Optional[str]) -> Path:
         try:
             opts = base_opts.copy()
             opts["cookiefile"] = cookiefile
-            # Prefer mobile clients even with cookies to avoid n-signature issues
-            # They work well for most videos and don't require EJS
-            opts["extractor_args"] = {
-                "youtube": {
-                    "player_client": ["android", "ios", "web"],
-                }
-            }
-            _log(f"YTDLP: Trying with cookies + mobile clients for task={task_id}")
+            if has_node_runtime:
+                # With Node/EJS available, let yt-dlp choose its default client order.
+                _log(f"YTDLP: Trying with cookies + default clients (Node runtime) for task={task_id}")
+            else:
+                # No Node: mobile clients are the best fallback (no EJS), but may need PO Token.
+                opts["extractor_args"] = {"youtube": {"player_client": ["android", "ios"]}}
+                _log(f"YTDLP: Trying with cookies + mobile clients for task={task_id}")
             return _run_yt_dlp(url, opts, task_id)
         except Exception as exc1:
             _log(f"YTDLP: Failed with cookies ({exc1}), retrying without cookies")
@@ -948,12 +995,12 @@ def _download_audio(task_id: str, url: str, cookiefile: Optional[str]) -> Path:
     # Strategy 2: Use mobile clients without cookies (most reliable)
     try:
         opts = base_opts.copy()
-        opts["extractor_args"] = {
-            "youtube": {
-                "player_client": ["android", "ios"],
-            }
-        }
-        _log(f"YTDLP: Using android/ios clients without cookies for task={task_id}")
+        if has_node_runtime:
+            # With Node/EJS available, let yt-dlp choose its default client order.
+            _log(f"YTDLP: Using default clients (Node runtime) for task={task_id}")
+        else:
+            opts["extractor_args"] = {"youtube": {"player_client": ["android", "ios"]}}
+            _log(f"YTDLP: Using android/ios clients without cookies for task={task_id}")
         return _run_yt_dlp(url, opts, task_id)
     except Exception as exc2:
         raise RuntimeError(f"下载音频失败: {exc2}")
@@ -1302,6 +1349,10 @@ if __name__ == "__main__":
         f"{MODEL_SIZE} device={WHISPER_DEVICE} compute={WHISPER_COMPUTE} "
         f"cpu_threads={CPU_THREADS} num_workers=1 idle_seconds={IDLE_SECONDS}"
     )
+
+    # Run startup checks
+    _check_js_runtime()
+
     os.environ.pop("WEB_CONCURRENCY", None)
     os.environ.pop("UVICORN_WORKERS", None)
     try:
