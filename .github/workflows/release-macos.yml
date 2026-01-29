@@ -163,6 +163,25 @@ jobs:
           fi
           # ------------------------------------------------
 
+          # --- Download and Bundle Node.js (macOS ARM64) ---
+          NODE_VERSION="${NODE_VERSION:-20.11.1}"
+          NODE_DIST="node-v${NODE_VERSION}-darwin-arm64"
+          NODE_TAR="${NODE_DIST}.tar.gz"
+          NODE_URL="https://nodejs.org/dist/v${NODE_VERSION}/${NODE_TAR}"
+          echo "Downloading Node.js ${NODE_VERSION}..."
+          curl -L -o "${NODE_TAR}" "${NODE_URL}"
+          tar -xzf "${NODE_TAR}"
+          mkdir -p "staging/node/bin"
+          cp "${NODE_DIST}/bin/node" "staging/node/bin/node"
+          if [ -f "${NODE_DIST}/LICENSE" ]; then
+            cp "${NODE_DIST}/LICENSE" "staging/node/"
+          fi
+          if [ -f "${NODE_DIST}/NOTICE" ]; then
+            cp "${NODE_DIST}/NOTICE" "staging/node/"
+          fi
+          chmod +x "staging/node/bin/node"
+          # ------------------------------------------------
+
           # Zip it
           cd staging
           zip -r ../video-text-host-macos.zip .
