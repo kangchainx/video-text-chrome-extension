@@ -18,11 +18,17 @@ if [ -z "${EXT_ID}" ]; then
   exit 1
 fi
 
-NODE_BIN="$(command -v node || true)"
+BUNDLED_NODE="${SCRIPT_DIR}/node/bin/node"
+NODE_BIN=""
+if [ -x "${BUNDLED_NODE}" ]; then
+  NODE_BIN="${BUNDLED_NODE}"
+else
+  NODE_BIN="$(command -v node || true)"
+fi
 PYTHON_BIN="$(command -v python3 || true)"
 
 if [ -z "${NODE_BIN}" ]; then
-  echo "node not found. Please install Node.js first." >&2
+  echo "node not found (bundled or system). Please install Node.js or bundle it first." >&2
   exit 127
 fi
 if [ -z "${PYTHON_BIN}" ]; then

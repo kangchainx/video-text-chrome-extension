@@ -100,10 +100,22 @@ xattr -dr com.apple.quarantine . 2>/dev/null || true
 echo "✅ Quarantine attributes removed."
 
 # Set permissions
-chmod +x host-macos.sh
-chmod +x video-text-transcriber/video-text-transcriber
+chmod +x host-macos.sh || {
+    echo -e "${RED}Warning: Failed to set executable permission on host-macos.sh${NC}"
+}
+chmod +x video-text-transcriber/video-text-transcriber || {
+    echo -e "${RED}Error: Failed to set executable permission on video-text-transcriber${NC}"
+    exit 1
+}
 if [ -f "video-text-transcriber/ffmpeg" ]; then
-    chmod +x video-text-transcriber/ffmpeg
+    chmod +x video-text-transcriber/ffmpeg || {
+        echo -e "${RED}Warning: Failed to set executable permission on ffmpeg${NC}"
+    }
+fi
+if [ -f "node/bin/node" ]; then
+    chmod +x node/bin/node || {
+        echo -e "${RED}Warning: Failed to set executable permission on Node.js${NC}"
+    }
 fi
 
 # Get Extension ID

@@ -68,6 +68,32 @@ jobs:
           }
           # ------------------------------------------------
 
+          # --- Download and Bundle Node.js (Windows x64) ---
+          Write-Host "Downloading Node.js for Windows..."
+          $NodeVersion = "20.11.1"
+          $NodeDist = "node-v$NodeVersion-win-x64"
+          $NodeZip = "$NodeDist.zip"
+          $NodeUrl = "https://nodejs.org/dist/v$NodeVersion/$NodeZip"
+          Invoke-WebRequest -Uri $NodeUrl -OutFile $NodeZip
+
+          Write-Host "Extracting Node.js..."
+          Expand-Archive -LiteralPath $NodeZip -DestinationPath "node_temp" -Force
+
+          # Copy node.exe to staging/node/bin/ directory
+          New-Item -ItemType Directory -Path "$StagingDir\node\bin" -Force | Out-Null
+          Copy-Item -Path "node_temp\$NodeDist\node.exe" -Destination "$StagingDir\node\bin\node.exe" -Force
+
+          # Copy license files if they exist
+          if (Test-Path "node_temp\$NodeDist\LICENSE") {
+              Copy-Item -Path "node_temp\$NodeDist\LICENSE" -Destination "$StagingDir\node\" -Force
+          }
+          if (Test-Path "node_temp\$NodeDist\NOTICE") {
+              Copy-Item -Path "node_temp\$NodeDist\NOTICE" -Destination "$StagingDir\node\" -Force
+          }
+
+          Write-Host "Node.js bundled successfully."
+          # ------------------------------------------------
+
           # Create ZIP
           $ZipPath = "video-text-host-win.zip"
           Compress-Archive -Path "$StagingDir\*" -DestinationPath $ZipPath

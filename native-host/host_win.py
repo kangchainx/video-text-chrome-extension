@@ -69,7 +69,28 @@ def start_service(token):
     env["TRANSCRIBER_TOKEN"] = token
     env["TRANSCRIBER_TOKEN_PATH"] = TOKEN_PATH
     env["TRANSCRIBER_BASE_DIR"] = BASE_DIR
-    
+
+    # Configure Node.js runtime for yt-dlp (bundled or system)
+    node_bin = os.environ.get("NODE_BIN")
+    if not node_bin:
+        # Check bundled Node.js first
+        bundled_node = os.path.join(BASE_DIR, "node", "bin", "node.exe")
+        if os.path.exists(bundled_node):
+            node_bin = bundled_node
+            log(f"[host] Using bundled Node.js: {node_bin}")
+        else:
+            # Try to find Node.js in PATH
+            import shutil
+            system_node = shutil.which("node")
+            if system_node:
+                node_bin = system_node
+                log(f"[host] Using system Node.js: {node_bin}")
+            else:
+                log("[host] Warning: Node.js not found, YouTube may fail on some videos")
+
+    if node_bin:
+        env["NODE_BIN"] = node_bin
+
     log(f"[host] startService command={bin_path} port={SERVICE_PORT}")
     
     try:

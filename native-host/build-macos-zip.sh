@@ -19,6 +19,7 @@ REPO_ROOT="$(dirname "$HOST_DIR")"
 BUILD_DIR="${HOST_DIR}/build"
 DIST_DIR="${BUILD_DIR}/dist"
 FINAL_ZIP="${HOST_DIR}/video-text-host-macos.zip"
+NODE_VERSION="${NODE_VERSION:-20.11.1}"
 
 echo "=== Building VideoTextHost (macOS) v${VERSION} ==="
 
@@ -86,7 +87,24 @@ cp -R "${DIST_DIR}/video-text-transcriber" "${STAGING_DIR}/"
 # Copy helper scripts from native-host/
 cp "${HOST_DIR}/host-macos.sh" "${STAGING_DIR}/"
 cp "${HOST_DIR}/host.cjs" "${STAGING_DIR}/"
-cp "${HOST_DIR}/host.cjs" "${STAGING_DIR}/"
+
+# Bundle Node.js runtime (for yt-dlp EJS/JS runtime)
+echo "--- Bundling Node.js ${NODE_VERSION} ---"
+NODE_DIST="node-v${NODE_VERSION}-darwin-arm64"
+NODE_TAR="${NODE_DIST}.tar.gz"
+NODE_URL="https://nodejs.org/dist/v${NODE_VERSION}/${NODE_TAR}"
+NODE_WORK="${BUILD_DIR}/node"
+mkdir -p "${NODE_WORK}"
+curl -L -o "${NODE_WORK}/${NODE_TAR}" "${NODE_URL}"
+tar -xzf "${NODE_WORK}/${NODE_TAR}" -C "${NODE_WORK}"
+mkdir -p "${STAGING_DIR}/node/bin"
+cp "${NODE_WORK}/${NODE_DIST}/bin/node" "${STAGING_DIR}/node/bin/node"
+if [ -f "${NODE_WORK}/${NODE_DIST}/LICENSE" ]; then
+  cp "${NODE_WORK}/${NODE_DIST}/LICENSE" "${STAGING_DIR}/node/"
+fi
+if [ -f "${NODE_WORK}/${NODE_DIST}/NOTICE" ]; then
+  cp "${NODE_WORK}/${NODE_DIST}/NOTICE" "${STAGING_DIR}/node/"
+fi
 
 # Write Extension ID
 echo "${EXTENSION_ID}" > "${STAGING_DIR}/extension-id.txt"
@@ -94,6 +112,7 @@ echo "${EXTENSION_ID}" > "${STAGING_DIR}/extension-id.txt"
 # Ensure permissions
 chmod +x "${STAGING_DIR}/host-macos.sh"
 chmod +x "${STAGING_DIR}/video-text-transcriber/video-text-transcriber"
+chmod +x "${STAGING_DIR}/node/bin/node"
 
 echo "--- Creating ZIP Archive ---"
 cd "${STAGING_DIR}"

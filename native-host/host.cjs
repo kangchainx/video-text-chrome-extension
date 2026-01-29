@@ -8,6 +8,7 @@ const { spawn } = require('child_process');
 const SERVICE_PORT = parseInt(process.env.TRANSCRIBER_PORT || '8001', 10);
 const PYTHON_BIN = process.env.PYTHON_BIN || 'python3';
 const TRANSCRIBER_BIN = process.env.TRANSCRIBER_BIN || '';
+const NODE_BIN = process.env.NODE_BIN || process.execPath;
 const DEFAULT_SCRIPT_PATH = path.resolve(__dirname, 'mini_transcriber.py');
 const DEFAULT_BIN_PATH = path.resolve(__dirname, 'video-text-transcriber');
 const DEFAULT_TOKEN_PATH = path.resolve(__dirname, 'temp', 'service.token');
@@ -117,6 +118,7 @@ function startService(token) {
     ...process.env,
     TRANSCRIBER_PORT: String(SERVICE_PORT),
     TRANSCRIBER_TOKEN: token,
+    NODE_BIN,
   };
   const { command, args, mode } = resolveServiceCommand();
   if (mode === 'bin') {
