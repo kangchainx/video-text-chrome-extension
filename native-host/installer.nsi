@@ -76,7 +76,7 @@ Section "MainSection" SEC01
   ; Create host-win.bat
   FileOpen $0 "$INSTDIR\host-win.bat" w
   FileWrite $0 '@echo off\r\n'
-  FileWrite $0 '"%~dp0video-text-transcriber.exe" %*\r\n'
+  FileWrite $0 '"%~dp0native-host.exe" %*\r\n'
   FileClose $0
 
   ; Registry Keys for Chrome
