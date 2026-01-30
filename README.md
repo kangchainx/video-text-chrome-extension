@@ -96,6 +96,16 @@ python mini_transcriber.py
 
 ## 📝 Version History
 
+### v1.0.4 (2026-01-30)
+
+**🚀 Enhanced YouTube Compatibility**
+- **Bundled Node.js Runtime**: Package Node.js v20.11.1 with macOS (ARM64) and Windows (x64) releases to enable advanced YouTube signature decryption.
+- **Auto-Detection**: Automatically detect bundled or system Node.js runtime with zero user configuration.
+- **Smart Fallback**: When Node.js is unavailable, seamlessly fall back to mobile client mode for maximum compatibility.
+
+**🐛 Bug Fixes**
+- Fix Windows native messaging entry point to correctly launch the host wrapper instead of the transcription service.
+
 ### v1.0.3 (2026-01-24)
 
 **⚡️ Automation & Build System**
