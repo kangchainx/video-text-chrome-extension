@@ -96,6 +96,21 @@ python mini_transcriber.py
 
 ## 📝 版本历史
 
+### v1.0.5 (2026-01-31)
+
+**🚀 后台任务与通知**
+- **任务同步移至后台**：任务更新与徽章计数由 Service Worker 处理，侧边栏更轻量。
+- **通知更可靠**：完成/失败通知由后台发送，不受面板生命周期影响。
+
+**🧩 MV3 稳定性**
+- **自动恢复 SSE**：持久化 SSE 凭据，MV3 worker 重启后自动恢复流式连接。
+
+**📦 发布对齐**
+- **Windows 打包对齐**：安装器 manifest 路径与 PyInstaller 资源收集与 macOS 构建行为一致。
+
+**🐛 问题修复**
+- **取消时间戳**：取消任务转为 canceled 时不再更新 updatedAt。
+
 ### v1.0.4 (2026-01-30)
 
 **🚀 增强 YouTube 兼容性**
@@ -245,4 +260,3 @@ python mini_transcriber.py
 ## 许可证
 
 本项目基于 MIT 许可证开源 - 详见 [LICENSE](LICENSE) 文件。
-

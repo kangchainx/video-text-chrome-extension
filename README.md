@@ -96,6 +96,21 @@ python mini_transcriber.py
 
 ## 📝 Version History
 
+### v1.0.5 (2026-01-31)
+
+**🚀 Background Task & Notification**
+- **Move task sync to background**: Task updates and badge counts are handled by the service worker to keep the side panel lightweight.
+- **Reliable notifications**: Completion/error notifications are sent from background, independent of the panel lifecycle.
+
+**🧩 MV3 Stability**
+- **Auto-restore SSE**: Persist SSE credentials and restart streaming after MV3 worker restarts.
+
+**📦 Release Alignment**
+- **Windows packaging parity**: Align installer manifest path and PyInstaller resource collection with macOS build behavior.
+
+**🐛 Bug Fixes**
+- **Cancel timestamp**: Avoid updating `updatedAt` when canceling transitions to canceled.
+
 ### v1.0.4 (2026-01-30)
 
 **🚀 Enhanced YouTube Compatibility**
@@ -247,4 +262,3 @@ Pull requests are welcome! Please make sure to update tests as appropriate.
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
