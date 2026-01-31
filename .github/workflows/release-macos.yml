@@ -29,6 +29,8 @@ jobs:
           # Upgrade yt-dlp to latest version for the build
           pip install -U yt-dlp
           pip install pyinstaller
+          # Ensure yt-dlp-ejs is not bundled; prefer yt-dlp builtin scripts
+          pip uninstall -y yt-dlp-ejs || true
 
       - name: Get Component Versions
         id: versions

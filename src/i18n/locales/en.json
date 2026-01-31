@@ -22,7 +22,6 @@
     "connectionTimeout": "Connection timeout, check if Native Host is running",
     "serviceTimeout": "Service response timeout",
     "requestTimeout": "Request timeout, check service status",
-    "refreshTasksFailed": "Failed to refresh task list",
     "addTaskFailed": "Failed to add task",
     "cancelTaskFailed": "Failed to cancel task",
     "retryFailed": "Retry failed",

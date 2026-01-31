@@ -613,7 +613,6 @@ def _load_tasks_from_db() -> None:
                 task["errorMessage"] = None
                 task["downloadProgress"] = 0
                 task["transcribeProgress"] = 0
-                task["updatedAt"] = now
                 tasks_to_persist.append(task)
 
             tasks[task["id"]] = task
@@ -692,8 +691,13 @@ def _update_task(task_id: str, **updates: Any) -> None:
                     updates.pop(key, None)
             if not updates:
                 return
+        skip_updated_at = (
+            current_status == TASK_STATUS_CANCELING
+            and updates.get("status") == TASK_STATUS_CANCELED
+        )
         task.update(updates)
-        task["updatedAt"] = time.time()
+        if not skip_updated_at:
+            task["updatedAt"] = time.time()
         _db_upsert_task(task)
         _touch_activity()
 

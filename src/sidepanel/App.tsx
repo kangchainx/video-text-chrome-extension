@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import ConfirmModal from "./ConfirmModal";
 import UpdateBadge from "../components/UpdateBadge";
@@ -76,11 +76,6 @@ const IN_PROGRESS_STATUSES: TaskStatus[] = [
   "transcribing",
 ];
 
-interface TasksSnapshot {
-  tasks: TaskItem[];
-  activeTaskId: string | null;
-}
-
 type DiagnosticStage = "idle" | "running" | "result";
 type DiagnosticStatus = "pending" | "running" | "done" | "fail";
 
@@ -146,7 +141,6 @@ const App: React.FC = () => {
   const [visibleCount, setVisibleCount] = useState(5);
   const [filter, setFilter] = useState<"active" | "done">("active");
   const [hasSnapshot, setHasSnapshot] = useState(false);
-  const [animateKey, setAnimateKey] = useState(0);
   const [diagnosticStage, setDiagnosticStage] =
     useState<DiagnosticStage>("idle");
   const [diagnosticSteps, setDiagnosticSteps] = useState<DiagnosticStep[]>([]);
@@ -186,9 +180,8 @@ const App: React.FC = () => {
     variant?: "danger" | "warning" | "info";
   }>({ isOpen: false, title: "", message: "", onConfirm: () => {} });
 
-  const sseRef = useRef<EventSource | null>(null);
+  // SSE is now managed by background service worker
   const reconnectTimerRef = useRef<number | null>(null);
-  const sseRetryCountRef = useRef(0);
   const statusPollRef = useRef<number | null>(null);
   const overlayTimerRef = useRef<number | null>(null);
   const overlayStartRef = useRef<number>(Date.now());
@@ -237,9 +230,11 @@ const App: React.FC = () => {
       return tasks.map((task) => ({ ...task, displayStatus: task.status }));
     }
     return tasks.map((task) => {
+      const isCanceling = task.status === "canceling";
       const shouldOverride =
-        optimisticCanceledIds.has(task.id) &&
-        IN_PROGRESS_STATUSES.includes(task.status);
+        isCanceling ||
+        (optimisticCanceledIds.has(task.id) &&
+          IN_PROGRESS_STATUSES.includes(task.status));
       return {
         ...task,
         displayStatus: shouldOverride ? "canceled" : task.status,
@@ -267,7 +262,7 @@ const App: React.FC = () => {
       const completed = tasksWithDisplay.filter((task) =>
         ["done", "canceled", "error"].includes(task.displayStatus)
       );
-      completed.sort((a, b) => b.createdAt - a.createdAt);
+      completed.sort((a, b) => (b.updatedAt ?? b.createdAt) - (a.updatedAt ?? a.createdAt));
       return completed;
     }
     const active = tasksWithDisplay.filter((task) =>
@@ -282,10 +277,10 @@ const App: React.FC = () => {
     [filteredTasks, visibleCount]
   );
 
-  useEffect(() => {
+  const setFilterAndReset = useCallback((next: "active" | "done") => {
+    setFilter(next);
     setVisibleCount(5);
-    setAnimateKey((prev) => prev + 1);
-  }, [filter]);
+  }, []);
 
   useEffect(() => {
     progressRef.current = progressValue;
@@ -367,9 +362,9 @@ const App: React.FC = () => {
   useEffect(() => {
     if (!tourMode) return;
     if (tourStep === 2) {
-      setFilter("active");
+      setFilterAndReset("active");
     }
-  }, [tourMode, tourStep]);
+  }, [tourMode, tourStep, setFilterAndReset]);
 
   useEffect(() => {
     if (!tourMode) return;
@@ -459,11 +454,7 @@ const App: React.FC = () => {
         reconnectTimerRef.current = null;
       }
 
-      // 关闭 SSE 连接
-      if (sseRef.current) {
-        sseRef.current.close();
-        sseRef.current = null;
-      }
+      // SSE connection is managed by background, no cleanup needed here
     };
   }, []);
 
@@ -622,22 +613,6 @@ const App: React.FC = () => {
     }
   };
 
-  const refreshTasks = async () => {
-    try {
-      const response = await apiFetch("/api/tasks");
-      const data = (await response.json()) as TasksSnapshot;
-      setTasks(data.tasks);
-      setActiveTaskId(data.activeTaskId);
-      setHasSnapshot(true);
-    } catch (error: any) {
-      console.error(error);
-      // Only show toast for non-timeout errors to avoid duplicate notifications
-      if (error.message !== "request_timeout") {
-        showToast("error", t("errors.refreshTasksFailed"));
-      }
-    }
-  };
-
   const fetchServiceStatus = async () => {
     try {
       const response = await apiFetch("/api/status");
@@ -688,52 +663,20 @@ const App: React.FC = () => {
     return false;
   };
 
-  const SSE_MAX_RETRIES = 5;
-  const SSE_BASE_DELAY = 1000;
-
-  const startSse = () => {
-    if (!apiBase || !serviceToken) return;
-    if (sseRef.current) {
-      sseRef.current.close();
-    }
-    setSseStatus("connecting");
-    const url = `${apiBase}/api/tasks/stream?token=${encodeURIComponent(
-      serviceToken
-    )}`;
-    const eventSource = new EventSource(url);
-    sseRef.current = eventSource;
-    eventSource.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data) as TasksSnapshot;
-        setTasks(data.tasks);
-        setActiveTaskId(data.activeTaskId);
-        setSseStatus("connected");
-        setHasSnapshot(true);
-        sseRetryCountRef.current = 0; // 连接成功，重置重试计数
-      } catch (error) {
-        console.error(error);
-      }
-    };
-    eventSource.onerror = () => {
-      setSseStatus("error");
-      eventSource.close();
-      if (reconnectTimerRef.current) {
-        window.clearTimeout(reconnectTimerRef.current);
-      }
-
-      sseRetryCountRef.current += 1;
-
-      if (sseRetryCountRef.current > SSE_MAX_RETRIES) {
-        showToast("error", t("errors.sseReconnectFailed"));
+  // Task polling from background (replaced SSE)
+  const pollTasksFromBackground = () => {
+    chrome.runtime.sendMessage({ type: 'GET_TASKS' }, (response) => {
+      if (chrome.runtime.lastError) {
+        console.error('[App] Failed to get tasks from background:', chrome.runtime.lastError);
         return;
       }
-
-      // Exponential backoff: 1s, 2s, 4s, 8s, 16s
-      const delay = SSE_BASE_DELAY * Math.pow(2, sseRetryCountRef.current - 1);
-      reconnectTimerRef.current = window.setTimeout(() => {
-        startSse();
-      }, delay);
-    };
+      if (response && response.tasks) {
+        setTasks(response.tasks);
+        setActiveTaskId(response.activeTaskId);
+        setSseStatus("connected");
+        setHasSnapshot(true);
+      }
+    });
   };
 
   const ensureService = async (waitForReady = false) => {
@@ -802,27 +745,49 @@ const App: React.FC = () => {
       console.error('[App] Auto-connect failed:', error);
     });
     return () => {
-      if (sseRef.current) {
-        sseRef.current.close();
-      }
       if (reconnectTimerRef.current) {
         window.clearTimeout(reconnectTimerRef.current);
       }
     };
   }, [tourMode, serviceStatus, autoConnectEnabled, nativeHostInstalled]);
 
+  // Track sidepanel open/close via Port connection
   useEffect(() => {
-    if (serviceStatus !== "ready") return;
-    if (!apiBase || !serviceToken || tourMode === "auto") return;
-    sseRetryCountRef.current = 0; // 新连接时重置重试计数
-    refreshTasks();
-    startSse();
+    const port = chrome.runtime.connect({ name: 'sidepanel' });
     return () => {
-      if (sseRef.current) {
-        sseRef.current.close();
+      try {
+        port.disconnect();
+      } catch {
+        // Ignore disconnect errors on shutdown
       }
     };
-  }, [apiBase, serviceToken, tourMode, serviceStatus]);
+  }, []);
+
+  // Start SSE in background when service is ready
+  useEffect(() => {
+    if (serviceStatus !== "ready") return;
+    if (!servicePort || !serviceToken || tourMode === "auto") return;
+
+    // Tell background to start SSE
+    chrome.runtime.sendMessage({
+      type: 'START_SSE',
+      port: servicePort,
+      token: serviceToken
+    });
+
+    // Initial fetch (from background cache/SSE)
+    pollTasksFromBackground();
+
+    // Poll tasks from background every 1 second
+    const pollInterval = setInterval(() => {
+      pollTasksFromBackground();
+    }, 1000);
+
+    return () => {
+      clearInterval(pollInterval);
+      // Don't stop SSE when sidepanel closes - let background keep it running
+    };
+  }, [servicePort, serviceToken, tourMode, serviceStatus]);
 
   useEffect(() => {
     if (statusPollRef.current) {
@@ -948,16 +913,8 @@ const App: React.FC = () => {
     setOverlayHiding(false);
   }, [serviceStatus]);
 
-  useEffect(() => {
-    const inProgress = tasksWithDisplay.filter((task) =>
-      IN_PROGRESS_STATUSES.includes(task.displayStatus)
-    ).length;
-    if (!chrome?.action?.setBadgeText) return;
-    const badgeText =
-      inProgress > 99 ? "99+" : inProgress ? String(inProgress) : "";
-    chrome.action.setBadgeText({ text: badgeText });
-    chrome.action.setBadgeBackgroundColor({ color: "#4F46E5" });
-  }, [tasksWithDisplay]);
+  // Badge update is now handled by background service worker
+  // No need to update badge here anymore
 
   // 启动 yt-dlp 更新检查
   useEffect(() => {
@@ -965,7 +922,7 @@ const App: React.FC = () => {
     if (serviceStatus !== "ready") return;
     
     const cleanup = startPeriodicCheck((info) => {
-      console.log('[App] Update available:', info);
+      // console.log('[App] Update available:', info);
       setUpdateInfo(info);
     });
 
@@ -1207,8 +1164,7 @@ const App: React.FC = () => {
         method: "POST",
         body: JSON.stringify(payload),
       });
-      setFilter("active"); // 成功创建后立马切换到进行中标签页
-      await refreshTasks();
+      setFilterAndReset("active"); // 成功创建后立马切换到进行中标签页
     } catch (error: any) {
       // Silently ignore tour_active error to avoid confusing error messages during auto tour
       if (error?.message === "tour_active") return;
@@ -1241,7 +1197,6 @@ const App: React.FC = () => {
     });
     try {
       await apiFetch(`/api/tasks/${task.id}/cancel`, { method: "POST" });
-      await refreshTasks();
       showToast("info", t("task.canceled"));
     } catch (error: any) {
       setOptimisticCanceledIds((prev) => {
@@ -1265,7 +1220,6 @@ const App: React.FC = () => {
         });
       }
       await apiFetch(`/api/tasks/${task.id}/retry`, { method: "POST" });
-      await refreshTasks();
     } catch (error: any) {
       showToast("error", error.message || t("errors.retryFailed"));
     }
@@ -1281,7 +1235,6 @@ const App: React.FC = () => {
       onConfirm: async () => {
         try {
           await apiFetch(`/api/tasks/${task.id}`, { method: "DELETE" });
-          await refreshTasks();
         } catch (error: any) {
           showToast("error", error.message || t("errors.deleteFailed"));
         }
@@ -1296,7 +1249,6 @@ const App: React.FC = () => {
         method: "POST",
         body: JSON.stringify({ include_done: false }),
       });
-      await refreshTasks();
     } catch (error: any) {
       showToast("error", error.message || t("errors.clearQueueFailed"));
     }
@@ -1342,10 +1294,8 @@ const App: React.FC = () => {
       setServiceToken(null);
       setSseStatus("connecting");
       setAutoConnectEnabled(false);
-      if (sseRef.current) {
-        sseRef.current.close();
-        sseRef.current = null;
-      }
+      // Tell background to stop SSE
+      chrome.runtime.sendMessage({ type: 'STOP_SSE' });
       showToast("success", t("toast.serviceStopped"));
     } catch (error: any) {
       showToast("error", error?.message || t("errors.stopServiceFailed"));
@@ -1882,7 +1832,7 @@ const App: React.FC = () => {
             ).map((item) => (
               <button
                 key={item.key}
-                onClick={() => setFilter(item.key)}
+                onClick={() => setFilterAndReset(item.key)}
                 className={`flex-1 rounded-xl py-2 text-sm font-bold transition-all duration-300 relative z-10 ${
                   filter === item.key
                     ? `bg-white shadow-md scale-[1.02] ${
@@ -1935,11 +1885,7 @@ const App: React.FC = () => {
           </div>
         </div>
 
-        <div
-          key={filter}
-          ref={listAreaRef}
-          className="space-y-4 pb-6 animate-slide-in-up"
-        >
+        <div ref={listAreaRef} className="space-y-4 pb-6 animate-slide-in-up">
           {serviceStatus === "ready" && !hasSnapshot && (
             <>
               {Array.from({ length: 3 }).map((_, index) => (
@@ -1963,7 +1909,7 @@ const App: React.FC = () => {
           {/* Section Header & Global Actions for Active List */}
           {filter === "active" && hasSnapshot && filteredTasks.length > 0 && (
             <div
-              className="flex items-center justify-between px-2 mb-2 animate-slide-in-up"
+              className="flex items-center justify-between px-2 mb-2"
               style={{ animationDelay: "0.1s" }}
             >
               <h2 className="text-xs font-black uppercase tracking-widest text-slate-400">
@@ -2030,7 +1976,7 @@ const App: React.FC = () => {
               const transcribeDone = task.transcribeProgress >= 100;
               return (
                 <div
-                  key={`${task.id}-${animateKey}`}
+                  key={task.id}
                   className={`task-card list-entry group relative transition-all duration-300 ${
                     isActive
                       ? "rounded-3xl border border-blue-200 bg-white p-5 shadow-md shadow-blue-500/10 ring-1 ring-blue-50"

@@ -17,7 +17,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command "& {
     $ErrorActionPreference = 'Stop';
     $AppName = 'VideoTextHost';
     $HostName = 'com.video_text.transcriber';
-    $InstallDir = \"$env:LOCALAPPDATA\$AppName\";
+    $InstallDir = \"$env:APPDATA\$AppName\";
 
     function Unregister-NativeHost {
         param ([string]$RegistryPath, [string]$Name);

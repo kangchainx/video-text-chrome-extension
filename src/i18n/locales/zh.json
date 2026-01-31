@@ -22,7 +22,6 @@
     "connectionTimeout": "连接本地服务超时，请检查 Native Host 是否正常运行",
     "serviceTimeout": "本地服务响应超时",
     "requestTimeout": "请求超时，请检查本地服务状态",
-    "refreshTasksFailed": "刷新任务列表失败",
     "addTaskFailed": "添加任务失败",
     "cancelTaskFailed": "取消任务失败",
     "retryFailed": "重试失败",
