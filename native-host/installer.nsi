@@ -3,6 +3,7 @@
 
 !include "MUI2.nsh"
 !include "FileFunc.nsh"
+!include "StrFunc.nsh"
 
 ; --- Basic Information ---
 Name "VideoText Host"
@@ -63,11 +64,13 @@ Section "MainSection" SEC01
   StrCpy $2 $1 ; $2 now contains Extension ID
 
   ; Write manifest.json with absolute path
+  StrCpy $3 "$INSTDIR\host-win.bat"
+  ${StrRep} $4 $3 "\\" "\\\\"
   FileOpen $0 "$INSTDIR\manifest.json" w
   FileWrite $0 '{\r\n'
   FileWrite $0 '  "name": "com.video_text.transcriber",\r\n'
   FileWrite $0 '  "description": "VideoText Transcriber Native Host",\r\n'
-  FileWrite $0 '  "path": "host-win.bat",\r\n'
+  FileWrite $0 '  "path": "$4",\r\n'
   FileWrite $0 '  "type": "stdio",\r\n'
   FileWrite $0 '  "allowed_origins": ["chrome-extension://$2/"]\r\n'
   FileWrite $0 '}'

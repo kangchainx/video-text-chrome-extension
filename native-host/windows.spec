@@ -1,6 +1,24 @@
 # -*- mode: python ; coding: utf-8 -*-
 
+from PyInstaller.utils.hooks import collect_all, collect_data_files
+
 block_cipher = None
+
+collect_all_packages = [
+    'faster_whisper',
+    'yt_dlp',
+    'opencc',
+    'ctranslate2',
+    'tokenizers',
+]
+
+data_only_packages = [
+    'mutagen',
+    'brotli',
+    'certifi',
+    'secretstorage',
+    'curl_cffi',
+]
 
 # Hidden imports matching build-macos-zip.sh
 hidden_imports = [
@@ -20,12 +38,23 @@ hidden_imports = [
     'curl_cffi',
 ]
 
+datas = []
+binaries = []
+for pkg in collect_all_packages:
+    pkg_datas, pkg_binaries, pkg_hidden = collect_all(pkg)
+    datas += pkg_datas
+    binaries += pkg_binaries
+    hidden_imports += pkg_hidden
+
+for pkg in data_only_packages:
+    datas += collect_data_files(pkg)
+
 # 1. Analysis for Main Service (The heavy lifter)
 a_service = Analysis(
     ['../mini_transcriber.py'],
     pathex=[],
-    binaries=[],
-    datas=[],
+    binaries=binaries,
+    datas=datas,
     hiddenimports=hidden_imports,
     hookspath=[],
     hooksconfig={},
@@ -54,8 +83,8 @@ exe_service = EXE(
 a_host = Analysis(
     ['host_win.py'],
     pathex=[],
-    binaries=[],
-    datas=[],
+    binaries=binaries,
+    datas=datas,
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
