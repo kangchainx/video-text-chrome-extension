@@ -110,8 +110,10 @@ export class BackgroundTaskManager {
     }
 
     this.restorePromise = new Promise((resolve) => {
-      chrome.storage.local.get(['sseCredentials'], (result) => {
-        const creds = result?.sseCredentials
+      chrome.storage.local.get(['sseCredentials'], (result: {
+        sseCredentials?: { port: number; token: string }
+      }) => {
+        const creds = result.sseCredentials
         if (creds && typeof creds.port === 'number' && typeof creds.token === 'string') {
           this.servicePort = creds.port
           this.serviceToken = creds.token
