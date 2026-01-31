@@ -11,7 +11,8 @@
     "cookies",
     "nativeMessaging",
     "notifications",
-    "alarms"
+    "alarms",
+    "storage"
   ],
   "host_permissions": [
     "https://*.youtube.com/*",

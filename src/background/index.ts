@@ -5,6 +5,8 @@ import { taskManager } from './taskManager'
 
 const sidepanelPorts = new Set<chrome.runtime.Port>()
 
+void taskManager.restoreSSEFromStorage()
+
 chrome.runtime.onConnect.addListener((port) => {
   if (port.name !== 'sidepanel') return
 
@@ -39,15 +41,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   switch (message.type) {
     case 'START_SSE':
       taskManager.startSSE(message.port, message.token)
+      taskManager.persistSSECredentials(message.port, message.token)
       sendResponse({ ok: true })
       break
 
     case 'STOP_SSE':
       taskManager.stopSSE()
+      taskManager.clearSSECredentials()
       sendResponse({ ok: true })
       break
 
     case 'GET_TASKS':
+      taskManager.ensureSSEConnection()
       sendResponse(taskManager.getTasks())
       break
 

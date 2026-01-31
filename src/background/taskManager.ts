@@ -15,6 +15,7 @@ export class BackgroundTaskManager {
   private isSidepanelOpen: boolean = false
   private reconnectAttempts: number = 0
   private reconnectTimer: number | null = null
+  private restorePromise: Promise<void> | null = null
 
   // Track tasks that have been notified to avoid duplicate notifications
   private notifiedTaskIds: Set<string> = new Set()
@@ -82,6 +83,60 @@ export class BackgroundTaskManager {
     if (resetBackoff) {
       this.reconnectAttempts = 0
     }
+  }
+
+  /**
+   * Persist SSE credentials for MV3 worker restarts.
+   */
+  persistSSECredentials(port: number, token: string): void {
+    chrome.storage.local.set({
+      sseCredentials: { port, token }
+    })
+  }
+
+  /**
+   * Clear persisted SSE credentials.
+   */
+  clearSSECredentials(): void {
+    chrome.storage.local.remove('sseCredentials')
+  }
+
+  /**
+   * Restore SSE credentials and restart SSE if needed.
+   */
+  async restoreSSEFromStorage(): Promise<void> {
+    if (this.restorePromise) {
+      return this.restorePromise
+    }
+
+    this.restorePromise = new Promise((resolve) => {
+      chrome.storage.local.get(['sseCredentials'], (result) => {
+        const creds = result?.sseCredentials
+        if (creds && typeof creds.port === 'number' && typeof creds.token === 'string') {
+          this.servicePort = creds.port
+          this.serviceToken = creds.token
+          if (!this.sseConnection) {
+            this.startSSE(creds.port, creds.token)
+          }
+        }
+        this.restorePromise = null
+        resolve()
+      })
+    })
+
+    return this.restorePromise
+  }
+
+  /**
+   * Ensure SSE is active if credentials are available.
+   */
+  ensureSSEConnection(): void {
+    if (this.sseConnection) return
+    if (this.servicePort && this.serviceToken) {
+      this.startSSE(this.servicePort, this.serviceToken)
+      return
+    }
+    void this.restoreSSEFromStorage()
   }
 
   /**
