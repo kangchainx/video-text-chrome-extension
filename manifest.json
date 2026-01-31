@@ -9,7 +9,9 @@
     "activeTab",
     "downloads",
     "cookies",
-    "nativeMessaging"
+    "nativeMessaging",
+    "notifications",
+    "alarms"
   ],
   "host_permissions": [
     "https://*.youtube.com/*",
