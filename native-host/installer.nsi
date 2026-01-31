@@ -68,19 +68,19 @@ Section "MainSection" SEC01
   StrCpy $3 "$INSTDIR\host-win.bat"
   ${StrRep} $4 $3 "\\" "\\\\"
   FileOpen $0 "$INSTDIR\manifest.json" w
-  FileWrite $0 '{\r\n'
-  FileWrite $0 '  "name": "com.video_text.transcriber",\r\n'
-  FileWrite $0 '  "description": "VideoText Transcriber Native Host",\r\n'
-  FileWrite $0 '  "path": "$4",\r\n'
-  FileWrite $0 '  "type": "stdio",\r\n'
-  FileWrite $0 '  "allowed_origins": ["chrome-extension://$2/"]\r\n'
+  FileWrite $0 '{$\r$\n'
+  FileWrite $0 '  "name": "com.video_text.transcriber",$\r$\n'
+  FileWrite $0 '  "description": "VideoText Transcriber Native Host",$\r$\n'
+  FileWrite $0 '  "path": "$4",$\r$\n'
+  FileWrite $0 '  "type": "stdio",$\r$\n'
+  FileWrite $0 '  "allowed_origins": ["chrome-extension://$2/"]$\r$\n'
   FileWrite $0 '}'
   FileClose $0
 
   ; Create host-win.bat
   FileOpen $0 "$INSTDIR\host-win.bat" w
-  FileWrite $0 '@echo off\r\n'
-  FileWrite $0 '"%~dp0native-host.exe" %*\r\n'
+  FileWrite $0 '@echo off$\r$\n'
+  FileWrite $0 '"%~dp0native-host.exe" %*$\r$\n'
   FileClose $0
 
   ; Registry Keys for Chrome
