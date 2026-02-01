@@ -133,15 +133,15 @@ const UpdateBadge: React.FC<UpdateBadgeProps> = ({ updateInfo, onDismiss }) => {
               <ol className="update-steps-list">
                 <li className="update-step-item">
                   <span className="update-step-number">1</span>
-                  <span>{t('update.tooltip.step1')}</span>
+                  <span>{t(platform === 'Windows' ? 'update.tooltip.windowsStep1' : 'update.tooltip.macOSStep1')}</span>
                 </li>
                 <li className="update-step-item">
                   <span className="update-step-number">2</span>
-                  <span>{t('update.tooltip.step2')}</span>
+                  <span>{t(platform === 'Windows' ? 'update.tooltip.windowsStep2' : 'update.tooltip.macOSStep2')}</span>
                 </li>
                 <li className="update-step-item">
                   <span className="update-step-number">3</span>
-                  <span>{t('update.tooltip.step3')}</span>
+                  <span>{t(platform === 'Windows' ? 'update.tooltip.windowsStep3' : 'update.tooltip.macOSStep3')}</span>
                 </li>
               </ol>
             </div>
