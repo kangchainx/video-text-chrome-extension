@@ -183,7 +183,28 @@ This project uses a hybrid architecture to combine the convenience of a browser 
 
 **Possible Causes**:
 
-1. **Extension ID Mismatch** (Most Common)
+1. **Local Service Paths (macOS / Windows)**
+
+   If you need to verify where the native host and Python service were installed:
+
+   **macOS**
+   - Install dir: `~/Library/Application Support/VideoTextHost`
+   - Python service (packaged): `~/Library/Application Support/VideoTextHost/video-text-transcriber/video-text-transcriber`
+   - Native host launcher: `~/Library/Application Support/VideoTextHost/host-macos.sh`
+   - Source manifest: `~/Library/Application Support/VideoTextHost/manifest.json`
+   - Chrome manifest: `~/Library/Application Support/Google/Chrome/NativeMessagingHosts/com.video_text.transcriber.json`
+   - Edge manifest: `~/Library/Application Support/Microsoft Edge/NativeMessagingHosts/com.video_text.transcriber.json`
+
+   **Windows**
+   - Native Messaging manifest is stored in the registry, not a JSON file under Chrome's profile.
+   - Install dir: `%APPDATA%\VideoTextHost`
+   - Python service (packaged): `%APPDATA%\VideoTextHost\video-text-transcriber.exe`
+   - Native host launcher: `%APPDATA%\VideoTextHost\host-win.bat`
+   - Source manifest: `%APPDATA%\VideoTextHost\manifest.json`
+   - Chrome registry key: `HKCU\Software\Google\Chrome\NativeMessagingHosts\com.video_text.transcriber`
+   - Edge registry key: `HKCU\Software\Microsoft\Edge\NativeMessagingHosts\com.video_text.transcriber`
+
+2. **Extension ID Mismatch** (Most Common)
 
    There are **two** manifest.json files involved:
    - **Source file**: `~/Library/Application Support/VideoTextHost/manifest.json` (macOS)

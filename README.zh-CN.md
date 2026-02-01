@@ -181,7 +181,28 @@ python mini_transcriber.py
 
 **可能原因**：
 
-1. **扩展 ID 不匹配**（最常见）
+1. **本地服务路径（macOS / Windows）**
+
+   如果需要确认本地服务安装位置：
+
+   **macOS**
+   - 安装目录：`~/Library/Application Support/VideoTextHost`
+   - Python 服务（打包）：`~/Library/Application Support/VideoTextHost/video-text-transcriber/video-text-transcriber`
+   - Native Host 启动脚本：`~/Library/Application Support/VideoTextHost/host-macos.sh`
+   - 源 manifest：`~/Library/Application Support/VideoTextHost/manifest.json`
+   - Chrome manifest：`~/Library/Application Support/Google/Chrome/NativeMessagingHosts/com.video_text.transcriber.json`
+   - Edge manifest：`~/Library/Application Support/Microsoft Edge/NativeMessagingHosts/com.video_text.transcriber.json`
+
+   **Windows**
+   - Native Messaging 配置存放于注册表，不在 Chrome 配置目录的 JSON 文件中
+   - 安装目录：`%APPDATA%\VideoTextHost`
+   - Python 服务（打包）：`%APPDATA%\VideoTextHost\video-text-transcriber.exe`
+   - Native Host 启动脚本：`%APPDATA%\VideoTextHost\host-win.bat`
+   - 源 manifest：`%APPDATA%\VideoTextHost\manifest.json`
+   - Chrome 注册表项：`HKCU\Software\Google\Chrome\NativeMessagingHosts\com.video_text.transcriber`
+   - Edge 注册表项：`HKCU\Software\Microsoft\Edge\NativeMessagingHosts\com.video_text.transcriber`
+
+2. **扩展 ID 不匹配**（最常见）
 
    系统中有**两个** manifest.json 文件：
    - **源文件**：`~/Library/Application Support/VideoTextHost/manifest.json`（macOS）
