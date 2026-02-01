@@ -108,6 +108,13 @@ python mini_transcriber.py
 **📦 Release Alignment**
 - **Windows packaging parity**: Align installer manifest path and PyInstaller resource collection with macOS build behavior.
 
+**🔧 Windows Installer Improvements**
+- **Fixed manifest.json formatting**: Corrected JSON path escaping (single `\` to double `\\`) and removed unwanted newlines in `allowed_origins` field.
+- **Improved uninstall script**: Replaced PowerShell-based uninstaller with native batch script - no longer requires administrator privileges, more reliable and easier to maintain.
+
+**📚 Documentation**
+- **Local service paths reference**: Added comprehensive documentation of installation paths, manifest locations, and registry keys for both macOS and Windows in troubleshooting section.
+
 **🐛 Bug Fixes**
 - **Cancel timestamp**: Avoid updating `updatedAt` when canceling transitions to canceled.
 

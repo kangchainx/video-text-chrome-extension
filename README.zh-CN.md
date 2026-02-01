@@ -108,6 +108,13 @@ python mini_transcriber.py
 **📦 发布对齐**
 - **Windows 打包对齐**：安装器 manifest 路径与 PyInstaller 资源收集与 macOS 构建行为一致。
 
+**🔧 Windows 安装器改进**
+- **修复 manifest.json 格式**：修正 JSON 路径转义（单 `\` 转为双 `\\`）并移除 `allowed_origins` 字段中的多余换行符。
+- **改进卸载脚本**：将基于 PowerShell 的卸载器替换为原生批处理脚本 - 不再需要管理员权限，更可靠且易于维护。
+
+**📚 文档改进**
+- **本地服务路径参考**：在故障排除部分添加了 macOS 和 Windows 的安装路径、manifest 位置和注册表键的完整文档。
+
 **🐛 问题修复**
 - **取消时间戳**：取消任务转为 canceled 时不再更新 updatedAt。
 
