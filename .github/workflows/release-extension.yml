@@ -1,4 +1,4 @@
-name: Build and Release Chrome Extension
+name: Build and Release Video to Text Assistant
 
 on:
   push:
@@ -30,7 +30,7 @@ jobs:
       - name: Zip Build Output
         run: |
           # Use the tag name for the zip file
-          ZIP_NAME="video-text-chrome-extension-${{ github.ref_name }}.zip"
+          ZIP_NAME="video-to-text-assistant-${{ github.ref_name }}.zip"
           cd dist
           zip -r "../$ZIP_NAME" .
 
@@ -38,7 +38,7 @@ jobs:
         uses: softprops/action-gh-release@v1
         if: startsWith(github.ref, 'refs/tags/')
         with:
-          files: video-text-chrome-extension-*.zip
+          files: video-to-text-assistant-*.zip
           draft: false
           prerelease: false
         env:

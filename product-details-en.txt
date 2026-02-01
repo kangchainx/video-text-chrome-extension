@@ -1,0 +1,140 @@
+🚀 Core Functions
+
+1. Video to Text
+Utilizing advanced Whisper AI models for precise speech recognition in videos.
+Supports multilingual recognition (90+ languages including Chinese, English, Japanese, etc.).
+Automatically generates complete transcripts, downloadable as TXT files.
+
+2. Supports Mainstream Video Platforms
+✅ YouTube (including short links youtu.be)
+✅ Bilibili
+
+3. Local Processing
+100% Local Execution: All audio and video processing is done on your device.
+Zero Data Upload: No video, audio, or text content is sent to external servers.
+Offline Availability: Once initialized, it works even without an internet connection.
+
+🔒 Privacy & Security
+We understand the importance of privacy, hence the following design:
+
+Cookies for Local Download Only: Collected cookies are used solely by the local yt-dlp tool to access videos you are logged into (e.g., age-restricted content), and are never sent to any server.
+No Tracking, No Ads: We do not collect any user behavior data nor insert any ads.
+Open Source & Transparent: Source code is fully open on GitHub, welcoming review and contribution.
+
+💡 Key Features
+✨ Free & Unlimited - Completely free with no limits on transcription count or duration.
+⚡ Efficient & Fast - Utilizes your device's CPU/GPU resources with intelligent threading for ultra-fast transcription.
+🎯 Accurate Recognition - Based on OpenAI Whisper model for high accuracy.
+🔧 Easy to Use - Open the sidebar, click "Create Task" to start, no complex configuration needed.
+📦 Lightweight Installation - Compact browser extension with an optimized Native Host installer.
+
+📋 How to Use
+
+Step 1: Install Extension
+Install this extension from the Chrome Web Store.
+
+Step 2: Install Native Host (Required)
+Click the extension icon to verify the connection. If not installed, a welcome page will guide you.
+Download the Native Host installer for your OS (Windows / macOS).
+Run the install script and wait for completion.
+Refresh the extension to start using.
+
+Step 3: Start Transcribing
+Open any YouTube or Bilibili video page.
+Click the extension icon in the browser toolbar to open the sidebar.
+Click the "Create Task" button.
+The extension will automatically download audio and start transcribing.
+Once done, click "Download Result" to get the TXT transcript.
+
+⚙️ System Requirements
+
+Browser:
+Google Chrome or Chromium-based browsers (Edge, Arc, etc.)
+Version requirement: 88 or above
+
+Operating System:
+Windows: Windows 10/11 (64-bit)
+macOS: macOS 11 Big Sur or above (ARM64 recommended for best performance)
+
+Hardware Recommendations:
+Processor: At least 2-core CPU (4-core+ recommended)
+RAM: At least 4GB RAM (8GB+ recommended)
+Disk: At least 2GB free space (for model files and temporary audio)
+
+❓ FAQ
+
+Q: Why is the Native Host required?
+A: Due to browser security restrictions, large AI models cannot run directly in the extension. The Native Host is a local service program that handles audio downloading and AI transcription, ensuring everything runs safely on your device.
+
+Q: How long does transcription take?
+A: It depends on video length and your device performance. Typically, a 10-minute video takes about 2-5 minutes to transcribe (faster on better hardware).
+
+Q: Which languages are supported?
+A: The Whisper model supports 90+ languages, including but not limited to Chinese (Mandarin, Cantonese), English, Japanese, Korean, French, German, Spanish, etc. The model automatically detects the language.
+
+Q: How to uninstall?
+A: After removing the extension from Chrome, you also need to manually uninstall the Native Host. Please download the uninstall script from our GitHub Release page and run it.
+
+===========================================
+📝 Version History
+===========================================
+
+【v1.0.5】(2026-01-31)
+• 🚀 Background Tasks - Tasks continue running after sidebar closes; notifications sent upon completion.
+• 🧪 Stability Improved - Auto-reconnect after MV3 Worker restarts.
+• 🔧 Windows Optimization - Improved install/uninstall scripts; fixed path issues.
+• 📚 Documentation - Added detailed troubleshooting guide.
+
+【v1.0.4】(2026-01-30)
+• 🚀 Bundled Node.js - Solves YouTube signature decryption; no manual Node install needed.
+• ⚡️ Smart Fallback - Auto-switches to mobile interface if Node environment is unavailable.
+• 🐛 Bug Fixes - Fixed Windows Native Host startup issues.
+
+【v1.0.3】(2026-01-24)
+• 📦 Automated Build - Introduced GitHub Actions for auto-packaging releases.
+• 🔄 Auto-Update yt-dlp - Automatically integrates the latest downloader with every release.
+• 📝 Smart Changelog - Auto-extracts release notes from README.
+
+【v1.0.1】(2026-01-15)
+
+✨ New Features
+• Added manual native service re-check function.
+• Automatically disable "Add Task" button when service is not installed.
+• Added "Recheck" button in the installation guide panel.
+
+🚀 Performance
+• Removed 10s startup delay; closes overlay immediately when ready.
+• Optimized detection flow with early checks.
+• Fixed overlay control logic.
+
+💡 UX Improvements
+• Smarter onboarding timing.
+• Simplified status indicator.
+• Clearer installation prompts and error feedback.
+
+🐛 Bug Fixes
+• Fixed first-launch connection issues.
+• Fixed overlay closing logic.
+• Cleaned up console logs.
+
+【v1.0.0】(2026-01-14)
+• Initial Release
+• Basic video-to-text functionality
+• Support for YouTube and Bilibili
+• Local AI transcription (Faster-Whisper)
+
+===========================================
+
+🔗 Get Help
+GitHub Repo: https://github.com/kangchainx/video-text-chrome-extension
+Issues: https://github.com/kangchainx/video-text-chrome-extension/issues
+Releases: https://github.com/kangchainx/video-text-chrome-extension/releases
+
+📜 License & Credits
+Open sourced under MIT License.
+Thanks to:
+OpenAI Whisper (faster-whisper implementation)
+yt-dlp (Video downloading)
+FFmpeg (Audio processing)
+
+Note: On first use, the AI model file (~140MB) will be downloaded automatically. Please ensure internet access and wait patiently. Downloaded once, used forever.
