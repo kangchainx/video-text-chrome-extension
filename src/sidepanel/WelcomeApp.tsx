@@ -241,7 +241,7 @@ const WelcomeApp: React.FC = () => {
                     </ol>
 
                     <a
-                      href={`${GITHUB_RELEASES_URL}/download/install_win.ps1`}
+                      href={`${GITHUB_RELEASES_URL}/download/VideoTextInstaller.exe`}
                       className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-white text-slate-900 rounded-xl font-bold text-sm hover:bg-slate-100 transition-all duration-200 hover:scale-105 shadow-lg w-full sm:w-auto"
                     >
                       <Download size={20} weight="bold" />
