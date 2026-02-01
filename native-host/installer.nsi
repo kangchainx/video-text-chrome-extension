@@ -62,11 +62,13 @@ Section "MainSection" SEC01
   FileOpen $0 "$INSTDIR\extension-id.txt" r
   FileRead $0 $1
   FileClose $0
-  StrCpy $2 $1 ; $2 now contains Extension ID
+  ; Trim whitespace and newlines from Extension ID
+  ${StrTrimNewLines} $2 $1 ; $2 now contains Extension ID without newlines
 
   ; Write manifest.json with absolute path
   StrCpy $3 "$INSTDIR\host-win.bat"
-  ${StrRep} $4 $3 "\\" "\\\\"
+  ; Replace single backslash with double backslash for JSON
+  ${StrRep} $4 $3 "\" "\\"
   FileOpen $0 "$INSTDIR\manifest.json" w
   FileWrite $0 '{$\r$\n'
   FileWrite $0 '  "name": "com.video_text.transcriber",$\r$\n'

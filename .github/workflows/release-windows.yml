@@ -47,7 +47,7 @@ jobs:
           # Read Extension ID from source file
           $ExtensionIdContent = Get-Content -Path ".github/EXTENSION_ID" -Raw
           $ExtensionId = $ExtensionIdContent.Trim()
-          $ExtensionId | Out-File -FilePath "$StagingDir\extension-id.txt" -Encoding ascii
+          $ExtensionId | Out-File -FilePath "$StagingDir\extension-id.txt" -Encoding ascii -NoNewline
           Write-Host "Using Extension ID: $ExtensionId"
 
           # --- Download and Bundle FFmpeg (Windows x64) ---
