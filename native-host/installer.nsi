@@ -5,6 +5,7 @@
 !include "FileFunc.nsh"
 !include "StrFunc.nsh"
 ${Using:StrFunc} StrRep
+${Using:StrFunc} StrTrimNewLines
 
 ; --- Basic Information ---
 Name "VideoText Host"
