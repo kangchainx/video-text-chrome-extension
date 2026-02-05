@@ -96,6 +96,16 @@ python mini_transcriber.py
 
 ## 📝 Version History
 
+### v1.0.6 (2026-02-05)
+
+**🔄 yt-dlp Release Refresh**
+- Publish a new tag to trigger CI rebuild so the native host bundles the latest `yt-dlp`.
+- Keep release notes explicit with `yt-dlp: YYYY.MM.DD` so the sidepanel update checker can detect updates correctly.
+
+**🧭 Operations**
+- Add a dedicated SOP for handling `yt-dlp` version lag, including changelog update, branch/PR flow, and tag release steps.
+- Clarify post-release action: reinstall/upgrade local native service, then retry failed tasks.
+
 ### v1.0.5 (2026-01-31)
 
 **🚀 Background Task & Notification**
