@@ -127,6 +127,26 @@ python mini_transcriber.py
 
 ## 📝 Version History
 
+### v1.0.7 (2026-03-24)
+
+**🎧 Long Audio Transcription**
+- Split long audio into smaller chunks before Whisper transcription to avoid memory spikes and failures on videos around 2 hours long.
+- Improve transcription error classification so transcription-stage failures are no longer reported as generic download failures.
+
+**📦 Local Packaging Parity**
+- Align local macOS Native Host packaging with the release workflow by bundling `ffmpeg` in locally built packages.
+- Make local packaging explicitly upgrade and bundle the latest `yt-dlp` at build time, matching CI behavior.
+
+**🔄 Update Experience**
+- Improve the update checker to compare both Native Host `service_version` and bundled `yt-dlp` version.
+- Update the sidepanel update badge to show separate service and `yt-dlp` version changes with clearer reasons to upgrade.
+
+**📚 Documentation**
+- Expand the developer setup docs for locally building and installing the packaged macOS Native Host.
+
+**Component Versions:**
+- yt-dlp: 2026.03.17
+
 ### v1.0.6 (2026-02-05)
 
 **🔄 yt-dlp Release Refresh**
