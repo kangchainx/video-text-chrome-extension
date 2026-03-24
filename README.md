@@ -144,9 +144,6 @@ python mini_transcriber.py
 **📚 Documentation**
 - Expand the developer setup docs for locally building and installing the packaged macOS Native Host.
 
-**Component Versions:**
-- yt-dlp: 2026.03.17
-
 ### v1.0.6 (2026-02-05)
 
 **🔄 yt-dlp Release Refresh**

@@ -144,9 +144,6 @@ python mini_transcriber.py
 **📚 文档改进**
 - 补充开发者文档，完善本地构建并安装 macOS 打包版 Native Host 的步骤说明。
 
-**组件版本：**
-- yt-dlp: 2026.03.17
-
 ### v1.0.6 (2026-02-05)
 
 **🔄 yt-dlp 发布刷新**
