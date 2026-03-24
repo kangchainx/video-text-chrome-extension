@@ -62,6 +62,33 @@ npm run dev
 
 **Pre-requisites**: Python 3.10+, Node.js (for YouTube verification)
 
+If you want to build the packaged Native Host locally and install that package on your own machine for testing, use the release-style flow below:
+
+```bash
+# 1. Create virtual environment
+python -m venv .venv
+source .venv/bin/activate
+
+# 2. Install full packaging dependencies
+pip install -r requirements.txt pyinstaller
+
+# 3. Build the macOS Native Host package locally
+./native-host/build-macos-zip.sh <YOUR_EXTENSION_ID> <VERSION>
+# Example: ./native-host/build-macos-zip.sh abcdefghijklmnopabcdefghijklmnop 1.0.6
+
+# 4. Install the locally built package
+cd native-host
+chmod +x install_mac.sh
+./install_mac.sh
+```
+
+Notes:
+- `build-macos-zip.sh` outputs `native-host/video-text-host-macos.zip`.
+- `install_mac.sh` will use that local ZIP first if it exists in the current directory, so it will not download from GitHub.
+- After installation, reload the extension in `chrome://extensions` before retesting.
+
+If you prefer to run the Python service directly from source during development, use the source-mode flow below:
+
 ```bash
 # 1. Create virtual environment
 python -m venv .venv

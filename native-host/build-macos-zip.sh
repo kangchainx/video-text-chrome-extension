@@ -91,6 +91,19 @@ cp -R "${DIST_DIR}/video-text-transcriber" "${STAGING_DIR}/"
 cp "${HOST_DIR}/host-macos.sh" "${STAGING_DIR}/"
 cp "${HOST_DIR}/host.cjs" "${STAGING_DIR}/"
 
+# Bundle FFmpeg runtime to match the release workflow
+echo "--- Bundling FFmpeg (macOS ARM64) ---"
+FFMPEG_WORK="${BUILD_DIR}/ffmpeg"
+mkdir -p "${FFMPEG_WORK}"
+curl -L -o "${FFMPEG_WORK}/ffmpeg.zip" "https://www.osxexperts.net/ffmpeg71arm.zip"
+unzip -q "${FFMPEG_WORK}/ffmpeg.zip" -d "${FFMPEG_WORK}"
+FFMPEG_PATH="$(find "${FFMPEG_WORK}" -name "ffmpeg" -type f | head -n 1)"
+if [ -z "${FFMPEG_PATH}" ]; then
+  echo "ERROR: FFmpeg binary not found in downloaded zip"
+  exit 1
+fi
+cp "${FFMPEG_PATH}" "${STAGING_DIR}/video-text-transcriber/ffmpeg"
+
 # Bundle Node.js runtime (for yt-dlp EJS/JS runtime)
 echo "--- Bundling Node.js ${NODE_VERSION} ---"
 NODE_DIST="node-v${NODE_VERSION}-darwin-arm64"
@@ -115,6 +128,7 @@ echo "${EXTENSION_ID}" > "${STAGING_DIR}/extension-id.txt"
 # Ensure permissions
 chmod +x "${STAGING_DIR}/host-macos.sh"
 chmod +x "${STAGING_DIR}/video-text-transcriber/video-text-transcriber"
+chmod +x "${STAGING_DIR}/video-text-transcriber/ffmpeg"
 chmod +x "${STAGING_DIR}/node/bin/node"
 
 echo "--- Creating ZIP Archive ---"

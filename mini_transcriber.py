@@ -2,6 +2,8 @@ import asyncio
 import json
 import os
 import sqlite3
+import shutil
+import subprocess
 import sys
 import multiprocessing
 import threading
@@ -17,7 +19,7 @@ from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 # Version information
-SERVICE_VERSION = "1.0.1"  # Update this when releasing new native host versions
+SERVICE_VERSION = "1.0.6"  # Update this when releasing new native host versions
 
 # Default to 4 threads for better performance, or limited by system cores
 default_threads = "4"
@@ -84,6 +86,10 @@ WHISPER_DEVICE = os.getenv("WHISPER_DEVICE", "cpu")
 WHISPER_COMPUTE = os.getenv("WHISPER_COMPUTE", "int8")
 IDLE_SECONDS = int(os.getenv("TRANSCRIBER_IDLE_SECONDS", "3600"))
 SLOW_LOG_SECONDS = float(os.getenv("TRANSCRIBER_SLOW_LOG_SECONDS", "5"))
+TRANSCRIBE_SPLIT_THRESHOLD_SECONDS = int(
+    os.getenv("TRANSCRIBER_SPLIT_THRESHOLD_SECONDS", "2700")
+)
+TRANSCRIBE_CHUNK_SECONDS = int(os.getenv("TRANSCRIBER_CHUNK_SECONDS", "1200"))
 
 SERVICE_PORT = int(os.getenv("TRANSCRIBER_PORT", "8001"))
 SERVICE_TOKEN = os.getenv("TRANSCRIBER_TOKEN")
@@ -719,7 +725,11 @@ def _clear_task_files(task: Dict[str, Any]) -> None:
         if not path:
             continue
         try:
-            Path(path).unlink(missing_ok=True)
+            candidate = Path(path)
+            if candidate.is_dir():
+                shutil.rmtree(candidate, ignore_errors=True)
+            else:
+                candidate.unlink(missing_ok=True)
         except OSError:
             pass
 
@@ -836,6 +846,83 @@ def _detect_ffmpeg() -> Optional[str]:
 
     _log("FFMPEG: Not found anywhere")
     return None
+
+
+def _ffmpeg_command() -> List[str]:
+    ffmpeg_bin = _detect_ffmpeg()
+    if ffmpeg_bin and Path(ffmpeg_bin).is_file():
+        return [ffmpeg_bin]
+    return ["ffmpeg"]
+
+
+def _get_audio_duration(audio_path: Path) -> float:
+    try:
+        import av
+
+        with av.open(str(audio_path)) as container:
+            if container.duration:
+                return max(0.0, float(container.duration) / 1_000_000.0)
+    except Exception as exc:
+        _log(f"AUDIO_DURATION probe_failed path={audio_path} error={exc}")
+    return 0.0
+
+
+def _build_transcription_chunks(task_id: str, audio_path: Path) -> tuple[List[Dict[str, Any]], float, Optional[Path]]:
+    total_duration = _get_audio_duration(audio_path)
+    split_threshold = max(TRANSCRIBE_SPLIT_THRESHOLD_SECONDS, TRANSCRIBE_CHUNK_SECONDS)
+    if total_duration <= 0 or total_duration <= split_threshold:
+        return [{"path": audio_path, "start": 0.0, "duration": total_duration}], total_duration, None
+
+    chunk_dir = TEMP_DIR / f"{task_id}-chunks"
+    shutil.rmtree(chunk_dir, ignore_errors=True)
+    chunk_dir.mkdir(parents=True, exist_ok=True)
+    output_pattern = chunk_dir / "chunk-%04d.wav"
+
+    command = [
+        *_ffmpeg_command(),
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-y",
+        "-i",
+        str(audio_path),
+        "-f",
+        "segment",
+        "-segment_time",
+        str(TRANSCRIBE_CHUNK_SECONDS),
+        "-reset_timestamps",
+        "1",
+        "-ac",
+        "1",
+        "-ar",
+        "16000",
+        str(output_pattern),
+    ]
+    try:
+        subprocess.run(command, check=True, capture_output=True, text=True)
+    except FileNotFoundError as exc:
+        raise RuntimeError("未找到 ffmpeg，无法进行长音频分段转写") from exc
+    except subprocess.CalledProcessError as exc:
+        detail = (exc.stderr or exc.stdout or str(exc)).strip()
+        raise RuntimeError(f"长音频分段失败: {detail}") from exc
+
+    chunk_paths = sorted(chunk_dir.glob("chunk-*.wav"))
+    if not chunk_paths:
+        raise RuntimeError("长音频分段失败: 未生成任何分段文件")
+
+    chunks: List[Dict[str, Any]] = []
+    for index, chunk_path in enumerate(chunk_paths):
+        start = index * TRANSCRIBE_CHUNK_SECONDS
+        remaining = max(total_duration - start, 0.0)
+        duration = min(float(TRANSCRIBE_CHUNK_SECONDS), remaining) if remaining else 0.0
+        chunks.append({"path": chunk_path, "start": float(start), "duration": duration})
+
+    _log(
+        "AUDIO_SPLIT "
+        f"task={task_id} duration={total_duration:.2f}s "
+        f"chunk_seconds={TRANSCRIBE_CHUNK_SECONDS} chunks={len(chunks)}"
+    )
+    return chunks, total_duration, chunk_dir
 
 
 def _run_yt_dlp(url: str, ydl_opts: Dict[str, Any], task_id: str) -> Path:
@@ -1014,16 +1101,26 @@ def _transcribe_audio(task_id: str, audio_path: Path) -> str:
     if not model_ready:
         _log(f"MODEL_LOAD_PENDING task={task_id}")
     model = _get_whisper_model()
-    segments, info = model.transcribe(str(audio_path), language="zh")
-    total_duration = getattr(info, "duration", None) or 0
+    chunks, total_duration, chunk_dir = _build_transcription_chunks(task_id, audio_path)
     parts = []
-    for segment in segments:
-        if _is_cancelled(task_id):
-            raise TaskCancelled("transcribe canceled")
-        parts.append(segment.text)
-        if total_duration:
-            progress = min(100, int(segment.end / total_duration * 100))
-            _update_task(task_id, transcribeProgress=progress)
+    try:
+        for chunk in chunks:
+            if _is_cancelled(task_id):
+                raise TaskCancelled("transcribe canceled")
+            segments, info = model.transcribe(str(chunk["path"]), language="zh")
+            chunk_duration = getattr(info, "duration", None) or chunk["duration"] or 0
+            for segment in segments:
+                if _is_cancelled(task_id):
+                    raise TaskCancelled("transcribe canceled")
+                parts.append(segment.text)
+                effective_total = total_duration or chunk_duration
+                if effective_total:
+                    current_time = chunk["start"] + min(float(segment.end), float(chunk_duration or segment.end))
+                    progress = min(99, int(current_time / effective_total * 100))
+                    _update_task(task_id, transcribeProgress=progress)
+    finally:
+        if chunk_dir:
+            shutil.rmtree(chunk_dir, ignore_errors=True)
     _update_task(task_id, transcribeProgress=100)
     text = "".join(parts).strip()
     return _to_simplified(text)
@@ -1044,6 +1141,7 @@ def _process_task(task_id: str) -> None:
         errorMessage=None,
     )
 
+    current_phase = TASK_STATUS_DOWNLOADING
     try:
         download_start = time.monotonic()
         audio_path = _download_audio(task_id, task["url"], task.get("cookiefilePath"))
@@ -1056,6 +1154,7 @@ def _process_task(task_id: str) -> None:
         # _get_whisper_model() will handle setting model_loading=True and loading the model safely
         # We don't need to manually set it here, which caused a deadlock (self-waiting)
 
+        current_phase = TASK_STATUS_TRANSCRIBING
         _update_task(task_id, status=TASK_STATUS_TRANSCRIBING, transcribeProgress=0)
         transcribe_start = time.monotonic()
         text = _transcribe_audio(task_id, audio_path)
@@ -1082,8 +1181,8 @@ def _process_task(task_id: str) -> None:
             _clear_task_files(task)
     except Exception as exc:
         message = str(exc)
-        error_code = "download_failed"
-        if _needs_cookies(message) and not task.get("cookiefilePath"):
+        error_code = "transcribe_failed" if current_phase == TASK_STATUS_TRANSCRIBING else "download_failed"
+        if current_phase != TASK_STATUS_TRANSCRIBING and _needs_cookies(message) and not task.get("cookiefilePath"):
             error_code = "cookies_required"
         _update_task(
             task_id,
