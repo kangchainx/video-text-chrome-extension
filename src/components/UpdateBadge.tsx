@@ -90,18 +90,26 @@ const UpdateBadge: React.FC<UpdateBadgeProps> = ({ updateInfo, onDismiss }) => {
 
             {/* Version Info */}
             <div className="update-version-info">
-              <div className="update-version-row">
-                <span className="update-version-label">{t('update.tooltip.currentVersion')}</span>
-                <code className="update-version-current">
-                  {updateInfo.currentVersion}
-                </code>
-              </div>
-              <div className="update-version-row">
-                <span className="update-version-label">{t('update.tooltip.latestVersion')}</span>
-                <code className="update-version-latest">
-                  {updateInfo.latestVersion}
-                </code>
-              </div>
+              {(updateInfo.updateType === 'service' || updateInfo.updateType === 'both') && (
+                <div className="update-version-row">
+                  <span className="update-version-label">{t('update.tooltip.serviceVersion')}</span>
+                  <span>
+                    <code className="update-version-current">{updateInfo.currentServiceVersion}</code>
+                    <span className="update-version-arrow"> → </span>
+                    <code className="update-version-latest">{updateInfo.latestServiceVersion}</code>
+                  </span>
+                </div>
+              )}
+              {(updateInfo.updateType === 'ytdlp' || updateInfo.updateType === 'both') && updateInfo.latestVersion && (
+                <div className="update-version-row">
+                  <span className="update-version-label">{t('update.tooltip.ytdlpVersion')}</span>
+                  <span>
+                    <code className="update-version-current">{updateInfo.currentVersion}</code>
+                    <span className="update-version-arrow"> → </span>
+                    <code className="update-version-latest">{updateInfo.latestVersion}</code>
+                  </span>
+                </div>
+              )}
             </div>
 
             {/* Why Update */}
@@ -110,18 +118,37 @@ const UpdateBadge: React.FC<UpdateBadgeProps> = ({ updateInfo, onDismiss }) => {
                 {t('update.tooltip.whyUpdate')}
               </h4>
               <ul className="update-reasons-list">
-                <li className="update-reason-item">
-                  <span className="update-reason-check">✓</span>
-                  <span>{t('update.tooltip.reason1')}</span>
-                </li>
-                <li className="update-reason-item">
-                  <span className="update-reason-check">✓</span>
-                  <span>{t('update.tooltip.reason2')}</span>
-                </li>
-                <li className="update-reason-item">
-                  <span className="update-reason-check">✓</span>
-                  <span>{t('update.tooltip.reason3')}</span>
-                </li>
+                {updateInfo.updateType === 'ytdlp' ? (
+                  <>
+                    <li className="update-reason-item">
+                      <span className="update-reason-check">✓</span>
+                      <span>{t('update.tooltip.reason1')}</span>
+                    </li>
+                    <li className="update-reason-item">
+                      <span className="update-reason-check">✓</span>
+                      <span>{t('update.tooltip.reason2')}</span>
+                    </li>
+                    <li className="update-reason-item">
+                      <span className="update-reason-check">✓</span>
+                      <span>{t('update.tooltip.reason3')}</span>
+                    </li>
+                  </>
+                ) : (
+                  <>
+                    <li className="update-reason-item">
+                      <span className="update-reason-check">✓</span>
+                      <span>{t('update.tooltip.serviceReason1')}</span>
+                    </li>
+                    <li className="update-reason-item">
+                      <span className="update-reason-check">✓</span>
+                      <span>{t('update.tooltip.serviceReason2')}</span>
+                    </li>
+                    <li className="update-reason-item">
+                      <span className="update-reason-check">✓</span>
+                      <span>{t('update.tooltip.serviceReason3')}</span>
+                    </li>
+                  </>
+                )}
               </ul>
             </div>
 
@@ -316,6 +343,11 @@ const UpdateBadge: React.FC<UpdateBadgeProps> = ({ updateInfo, onDismiss }) => {
           font-family: monospace;
           font-weight: 600;
           color: #059669;
+        }
+
+        .update-version-arrow {
+          color: #94a3b8;
+          font-size: 12px;
         }
 
         .update-section {

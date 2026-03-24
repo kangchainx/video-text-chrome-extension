@@ -23,6 +23,9 @@ NODE_VERSION="${NODE_VERSION:-20.11.1}"
 
 echo "=== Building VideoTextHost (macOS) v${VERSION} ==="
 
+# Align local builds with CI: always bundle the latest yt-dlp at build time
+python3 -m pip install -U yt-dlp
+
 # Ensure yt-dlp-ejs is not bundled; prefer yt-dlp builtin scripts
 python3 -m pip uninstall -y yt-dlp-ejs >/dev/null 2>&1 || true
 

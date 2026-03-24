@@ -72,11 +72,14 @@ source .venv/bin/activate
 # 2. 安装完整打包依赖
 pip install -r requirements.txt pyinstaller
 
-# 3. 在本地构建 macOS Native Host 安装包
+# 3. 额外安装最新 yt-dlp，确保本地打包与发布流程一致
+pip install -U yt-dlp
+
+# 4. 在本地构建 macOS Native Host 安装包
 ./native-host/build-macos-zip.sh <YOUR_EXTENSION_ID> <VERSION>
 # 示例：./native-host/build-macos-zip.sh abcdefghijklmnopabcdefghijklmnop 1.0.6
 
-# 4. 安装刚刚本地构建出来的包
+# 5. 安装刚刚本地构建出来的包
 cd native-host
 chmod +x install_mac.sh
 ./install_mac.sh
@@ -84,6 +87,7 @@ chmod +x install_mac.sh
 
 说明：
 - `build-macos-zip.sh` 会输出 `native-host/video-text-host-macos.zip`。
+- `build-macos-zip.sh` 也会在打包前升级 `yt-dlp`，与正式发布流程保持一致。
 - `install_mac.sh` 如果在当前目录发现这个本地 ZIP，会优先使用它，不会再去 GitHub 下载。
 - 安装完成后，请到 `chrome://extensions` 里刷新扩展，再重新测试。
 

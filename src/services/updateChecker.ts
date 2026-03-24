@@ -20,8 +20,11 @@ export interface VersionInfo {
 
 export interface UpdateInfo {
   needsUpdate: boolean;
+  updateType?: 'ytdlp' | 'service' | 'both';
   currentVersion?: string;
   latestVersion?: string;
+  currentServiceVersion?: string;
+  latestServiceVersion?: string;
   releaseNotes?: string;
   publishedAt?: string;
   downloadUrl?: string;
@@ -125,7 +128,31 @@ export function compareVersions(current: string, latest: string): number {
 }
 
 /**
+ * 比较 semver 版本号（格式：X.Y.Z）
+ * @returns 1 = latest 更新，0 = 相同，-1 = current 更新
+ */
+export function compareSemver(current: string, latest: string): number {
+  if (!current || !latest || current === "unknown" || latest === "unknown") {
+    return 0;
+  }
+
+  const currentParts = current.split(".").map(Number);
+  const latestParts = latest.split(".").map(Number);
+  const maxLen = Math.max(currentParts.length, latestParts.length);
+
+  for (let i = 0; i < maxLen; i++) {
+    const c = currentParts[i] || 0;
+    const l = latestParts[i] || 0;
+    if (l > c) return 1;
+    if (l < c) return -1;
+  }
+
+  return 0;
+}
+
+/**
  * 检查是否有更新
+ * 同时比较 service_version (semver) 和 yt-dlp 版本 (YYYY.MM.DD)
  */
 export async function checkForUpdates(): Promise<UpdateInfo> {
   try {
@@ -134,8 +161,11 @@ export async function checkForUpdates(): Promise<UpdateInfo> {
       console.log("[UpdateChecker] DEBUG_FORCE_UPDATE is enabled, returning mock update info");
       return {
         needsUpdate: true,
+        updateType: "both",
         currentVersion: "2025.01.01",
         latestVersion: "2026.01.19",
+        currentServiceVersion: "1.0.0",
+        latestServiceVersion: "1.0.6",
         releaseNotes: "测试更新提示",
         downloadUrl: "https://github.com/kangchainx/video-text-chrome-extension/releases/latest/download/update_mac.sh"
       };
@@ -154,43 +184,50 @@ export async function checkForUpdates(): Promise<UpdateInfo> {
     // 2. 获取最新 Release
     const release = await getLatestRelease();
 
-    // 3. 从 Release body 中提取 yt-dlp 版本
+    // 3. 比较 service_version（从 release tag_name 提取，如 "v1.0.6" → "1.0.6"）
+    const latestServiceVersion = (release.tag_name || "").replace(/^v/, "");
+    const serviceComparison = compareSemver(local.serviceVersion, latestServiceVersion);
+    const serviceNeedsUpdate = serviceComparison > 0;
+
+    // 4. 比较 yt-dlp 版本（从 release body 提取）
     const latestYtdlpVersion = extractYtdlpVersion(release.body || "");
-    if (!latestYtdlpVersion) {
-      console.warn(
-        "[UpdateChecker] Could not extract yt-dlp version from release notes",
-      );
+    let ytdlpNeedsUpdate = false;
+    if (latestYtdlpVersion) {
+      const ytdlpComparison = compareVersions(local.ytdlpVersion, latestYtdlpVersion);
+      ytdlpNeedsUpdate = ytdlpComparison > 0;
+    }
+
+    // 5. 判断是否需要更新
+    if (!serviceNeedsUpdate && !ytdlpNeedsUpdate) {
       return { needsUpdate: false };
     }
 
-    // 4. 比较版本
-    const comparison = compareVersions(local.ytdlpVersion, latestYtdlpVersion);
-
-    if (comparison < 0) {
-      // 本地版本更新（可能是开发版本），不提示
-      return { needsUpdate: false };
+    let updateType: 'ytdlp' | 'service' | 'both';
+    if (serviceNeedsUpdate && ytdlpNeedsUpdate) {
+      updateType = 'both';
+    } else if (serviceNeedsUpdate) {
+      updateType = 'service';
+    } else {
+      updateType = 'ytdlp';
     }
 
-    if (comparison > 0) {
-      // 有新版本可用
-      // 5. 查找更新脚本下载链接
-      const updateScript = release.assets?.find(
-        (asset: any) =>
-          asset.name === "update_mac.sh" || asset.name === "update_windows.exe",
-      );
+    // 6. 查找更新脚本下载链接
+    const updateScript = release.assets?.find(
+      (asset: any) =>
+        asset.name === "update_mac.sh" || asset.name === "update_windows.exe",
+    );
 
-      return {
-        needsUpdate: true,
-        currentVersion: local.ytdlpVersion,
-        latestVersion: latestYtdlpVersion,
-        releaseNotes: release.body || "",
-        publishedAt: release.published_at,
-        downloadUrl: updateScript?.browser_download_url,
-      };
-    }
-
-    // 版本相同，无需更新
-    return { needsUpdate: false };
+    return {
+      needsUpdate: true,
+      updateType,
+      currentVersion: local.ytdlpVersion,
+      latestVersion: latestYtdlpVersion || undefined,
+      currentServiceVersion: local.serviceVersion,
+      latestServiceVersion,
+      releaseNotes: release.body || "",
+      publishedAt: release.published_at,
+      downloadUrl: updateScript?.browser_download_url,
+    };
   } catch (error: any) {
     console.error("[UpdateChecker] Check failed:", error);
     return {

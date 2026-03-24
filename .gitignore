@@ -30,3 +30,4 @@ RESUBMISSION_GUIDE.md
 
 # Extension Packages
 *.zip
+.DS_Store

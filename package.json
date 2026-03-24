@@ -31,7 +31,7 @@
     "zustand": "^5.0.9"
   },
   "devDependencies": {
-    "@crxjs/vite-plugin": "^2.0.0-beta.33",
+    "@crxjs/vite-plugin": "^2.0.0",
     "@tailwindcss/postcss": "^4.1.18",
     "@tailwindcss/vite": "^4.1.18",
     "@types/chrome": "^0.1.32",
@@ -43,5 +43,10 @@
     "tailwindcss": "^4.1.18",
     "typescript": "^5.9.3",
     "vite": "^7.3.0"
+  },
+  "overrides": {
+    "@crxjs/vite-plugin": {
+      "rollup": "2.80.0"
+    }
   }
 }
