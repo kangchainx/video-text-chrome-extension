@@ -346,3 +346,15 @@ python mini_transcriber.py
 ## 许可证
 
 本项目基于 MIT 许可证开源 - 详见 [LICENSE](LICENSE) 文件。
+
+---
+
+## 赞助
+
+<div align="center">
+
+<img src="public/QR/ifd_QR.png" width="200" alt="赞助二维码" />
+&nbsp;&nbsp;&nbsp;&nbsp;
+<img src="public/QR/bmc_QR.png" width="200" alt="Buy Me a Coffee 二维码" />
+
+</div>
