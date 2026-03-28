@@ -19,7 +19,7 @@ from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 # Version information
-SERVICE_VERSION = "1.0.6"  # Update this when releasing new native host versions
+SERVICE_VERSION = "1.0.7"  # Update this when releasing new native host versions
 
 # Default to 4 threads for better performance, or limited by system cores
 default_threads = "4"

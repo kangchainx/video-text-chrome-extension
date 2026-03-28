@@ -37,6 +37,9 @@ These rules apply whenever an AI edits any of the following:
 7. Do not infer release component versions from README text.
    Read them from workflow logic, build commands, or actual installed package versions.
 
+8. When creating a new release version, update `SERVICE_VERSION` in `mini_transcriber.py` to match the new tag version.
+   This is the version reported by the `/health` endpoint and used by the update checker.
+
 ## Release Notes Rules
 
 1. Add new release notes to both:
