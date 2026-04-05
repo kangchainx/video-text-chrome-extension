@@ -1,4 +1,16 @@
 node_modules
+
+# Environment & secrets — 勿提交密钥；模板文件用 ! 白名单
+.env
+.env.*
+!.env.example
+.envrc
+
+# 常见本地密钥 / 凭证文件名
+*.pem
+*-service-account*.json
+*credentials*.json
+
 .venv
 venv
 __pycache__
