@@ -351,10 +351,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ---
 
-## Sponsor
-
-<div align="center">
-
 <img src="public/QR/ifd_QR.png" width="200" alt="Sponsor QR Code" />
 &nbsp;&nbsp;&nbsp;&nbsp;
 <img src="public/QR/bmc_QR.png" width="200" alt="Buy Me a Coffee QR Code" />
